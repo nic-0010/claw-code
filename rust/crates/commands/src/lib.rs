@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::env;
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -220,14 +221,14 @@ const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
         name: "agents",
         aliases: &[],
         summary: "List configured agents",
-        argument_hint: None,
+        argument_hint: Some("[list|help]"),
         resume_supported: true,
     },
     SlashCommandSpec {
         name: "skills",
         aliases: &[],
         summary: "List available skills",
-        argument_hint: None,
+        argument_hint: Some("[list|help]"),
         resume_supported: true,
     },
 ];
@@ -294,6 +295,27 @@ pub enum SlashCommand {
     },
     Unknown(String),
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlashCommandParseError {
+    message: String,
+}
+
+impl SlashCommandParseError {
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+impl fmt::Display for SlashCommandParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for SlashCommandParseError {}
 
 impl SlashCommand {
     #[must_use]
@@ -372,6 +394,333 @@ impl SlashCommand {
     }
 }
 
+pub fn validate_slash_command_input(
+    input: &str,
+) -> Result<Option<SlashCommand>, SlashCommandParseError> {
+    let trimmed = input.trim();
+    if !trimmed.starts_with('/') {
+        return Ok(None);
+    }
+
+    let mut parts = trimmed.trim_start_matches('/').split_whitespace();
+    let command = parts.next().unwrap_or_default();
+    if command.is_empty() {
+        return Err(SlashCommandParseError::new(
+            "Slash command name is missing. Use /help to list available slash commands.",
+        ));
+    }
+
+    let args = parts.collect::<Vec<_>>();
+    let remainder = remainder_after_command(trimmed, command);
+
+    Ok(Some(match command {
+        "help" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Help
+        }
+        "status" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Status
+        }
+        "sandbox" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Sandbox
+        }
+        "compact" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Compact
+        }
+        "bughunter" => SlashCommand::Bughunter { scope: remainder },
+        "commit" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Commit
+        }
+        "pr" => SlashCommand::Pr { context: remainder },
+        "issue" => SlashCommand::Issue { context: remainder },
+        "ultraplan" => SlashCommand::Ultraplan { task: remainder },
+        "teleport" => SlashCommand::Teleport {
+            target: Some(require_remainder(command, remainder, "<symbol-or-path>")?),
+        },
+        "debug-tool-call" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::DebugToolCall
+        }
+        "model" => SlashCommand::Model {
+            model: optional_single_arg(command, &args, "[model]")?,
+        },
+        "permissions" => SlashCommand::Permissions {
+            mode: parse_permissions_mode(&args)?,
+        },
+        "clear" => SlashCommand::Clear {
+            confirm: parse_clear_args(&args)?,
+        },
+        "cost" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Cost
+        }
+        "resume" => SlashCommand::Resume {
+            session_path: Some(require_remainder(command, remainder, "<session-path>")?),
+        },
+        "config" => SlashCommand::Config {
+            section: parse_config_section(&args)?,
+        },
+        "memory" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Memory
+        }
+        "init" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Init
+        }
+        "diff" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Diff
+        }
+        "version" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Version
+        }
+        "export" => SlashCommand::Export { path: remainder },
+        "session" => parse_session_command(&args)?,
+        "plugin" | "plugins" | "marketplace" => parse_plugin_command(&args)?,
+        "agents" => SlashCommand::Agents {
+            args: parse_list_or_help_args(command, remainder)?,
+        },
+        "skills" => SlashCommand::Skills {
+            args: parse_list_or_help_args(command, remainder)?,
+        },
+        other => SlashCommand::Unknown(other.to_string()),
+    }))
+}
+fn validate_no_args(command: &str, args: &[&str]) -> Result<(), SlashCommandParseError> {
+    if args.is_empty() {
+        return Ok(());
+    }
+
+    Err(command_error(
+        &format!("Unexpected arguments for /{command}."),
+        command,
+        &format!("/{command}"),
+    ))
+}
+
+fn optional_single_arg(
+    command: &str,
+    args: &[&str],
+    argument_hint: &str,
+) -> Result<Option<String>, SlashCommandParseError> {
+    match args {
+        [] => Ok(None),
+        [value] => Ok(Some((*value).to_string())),
+        _ => Err(usage_error(command, argument_hint)),
+    }
+}
+
+fn require_remainder(
+    command: &str,
+    remainder: Option<String>,
+    argument_hint: &str,
+) -> Result<String, SlashCommandParseError> {
+    remainder.ok_or_else(|| usage_error(command, argument_hint))
+}
+
+fn parse_permissions_mode(args: &[&str]) -> Result<Option<String>, SlashCommandParseError> {
+    let mode = optional_single_arg(
+        "permissions",
+        args,
+        "[read-only|workspace-write|danger-full-access]",
+    )?;
+    if let Some(mode) = mode {
+        if matches!(
+            mode.as_str(),
+            "read-only" | "workspace-write" | "danger-full-access"
+        ) {
+            return Ok(Some(mode));
+        }
+        return Err(command_error(
+            &format!(
+                "Unsupported /permissions mode '{mode}'. Use read-only, workspace-write, or danger-full-access."
+            ),
+            "permissions",
+            "/permissions [read-only|workspace-write|danger-full-access]",
+        ));
+    }
+
+    Ok(None)
+}
+
+fn parse_clear_args(args: &[&str]) -> Result<bool, SlashCommandParseError> {
+    match args {
+        [] => Ok(false),
+        ["--confirm"] => Ok(true),
+        [unexpected] => Err(command_error(
+            &format!("Unsupported /clear argument '{unexpected}'. Use /clear or /clear --confirm."),
+            "clear",
+            "/clear [--confirm]",
+        )),
+        _ => Err(usage_error("clear", "[--confirm]")),
+    }
+}
+
+fn parse_config_section(args: &[&str]) -> Result<Option<String>, SlashCommandParseError> {
+    let section = optional_single_arg("config", args, "[env|hooks|model|plugins]")?;
+    if let Some(section) = section {
+        if matches!(section.as_str(), "env" | "hooks" | "model" | "plugins") {
+            return Ok(Some(section));
+        }
+        return Err(command_error(
+            &format!("Unsupported /config section '{section}'. Use env, hooks, model, or plugins."),
+            "config",
+            "/config [env|hooks|model|plugins]",
+        ));
+    }
+
+    Ok(None)
+}
+
+fn parse_session_command(args: &[&str]) -> Result<SlashCommand, SlashCommandParseError> {
+    match args {
+        [] => Ok(SlashCommand::Session {
+            action: None,
+            target: None,
+        }),
+        ["list"] => Ok(SlashCommand::Session {
+            action: Some("list".to_string()),
+            target: None,
+        }),
+        ["list", ..] => Err(usage_error("session", "[list|switch <session-id>|fork [branch-name]]")),
+        ["switch"] => Err(usage_error("session switch", "<session-id>")),
+        ["switch", target] => Ok(SlashCommand::Session {
+            action: Some("switch".to_string()),
+            target: Some((*target).to_string()),
+        }),
+        ["switch", ..] => Err(command_error(
+            "Unexpected arguments for /session switch.",
+            "session",
+            "/session switch <session-id>",
+        )),
+        ["fork"] => Ok(SlashCommand::Session {
+            action: Some("fork".to_string()),
+            target: None,
+        }),
+        ["fork", target] => Ok(SlashCommand::Session {
+            action: Some("fork".to_string()),
+            target: Some((*target).to_string()),
+        }),
+        ["fork", ..] => Err(command_error(
+            "Unexpected arguments for /session fork.",
+            "session",
+            "/session fork [branch-name]",
+        )),
+        [action, ..] => Err(command_error(
+            &format!(
+                "Unknown /session action '{action}'. Use list, switch <session-id>, or fork [branch-name]."
+            ),
+            "session",
+            "/session [list|switch <session-id>|fork [branch-name]]",
+        )),
+    }
+}
+
+fn parse_plugin_command(args: &[&str]) -> Result<SlashCommand, SlashCommandParseError> {
+    match args {
+        [] => Ok(SlashCommand::Plugins {
+            action: None,
+            target: None,
+        }),
+        ["list"] => Ok(SlashCommand::Plugins {
+            action: Some("list".to_string()),
+            target: None,
+        }),
+        ["list", ..] => Err(usage_error("plugin list", "")),
+        ["install"] => Err(usage_error("plugin install", "<path>")),
+        ["install", target @ ..] => Ok(SlashCommand::Plugins {
+            action: Some("install".to_string()),
+            target: Some(target.join(" ")),
+        }),
+        ["enable"] => Err(usage_error("plugin enable", "<name>")),
+        ["enable", target] => Ok(SlashCommand::Plugins {
+            action: Some("enable".to_string()),
+            target: Some((*target).to_string()),
+        }),
+        ["enable", ..] => Err(command_error(
+            "Unexpected arguments for /plugin enable.",
+            "plugin",
+            "/plugin enable <name>",
+        )),
+        ["disable"] => Err(usage_error("plugin disable", "<name>")),
+        ["disable", target] => Ok(SlashCommand::Plugins {
+            action: Some("disable".to_string()),
+            target: Some((*target).to_string()),
+        }),
+        ["disable", ..] => Err(command_error(
+            "Unexpected arguments for /plugin disable.",
+            "plugin",
+            "/plugin disable <name>",
+        )),
+        ["uninstall"] => Err(usage_error("plugin uninstall", "<id>")),
+        ["uninstall", target] => Ok(SlashCommand::Plugins {
+            action: Some("uninstall".to_string()),
+            target: Some((*target).to_string()),
+        }),
+        ["uninstall", ..] => Err(command_error(
+            "Unexpected arguments for /plugin uninstall.",
+            "plugin",
+            "/plugin uninstall <id>",
+        )),
+        ["update"] => Err(usage_error("plugin update", "<id>")),
+        ["update", target] => Ok(SlashCommand::Plugins {
+            action: Some("update".to_string()),
+            target: Some((*target).to_string()),
+        }),
+        ["update", ..] => Err(command_error(
+            "Unexpected arguments for /plugin update.",
+            "plugin",
+            "/plugin update <id>",
+        )),
+        [action, ..] => Err(command_error(
+            &format!(
+                "Unknown /plugin action '{action}'. Use list, install <path>, enable <name>, disable <name>, uninstall <id>, or update <id>."
+            ),
+            "plugin",
+            "/plugin [list|install <path>|enable <name>|disable <name>|uninstall <id>|update <id>]",
+        )),
+    }
+}
+
+fn parse_list_or_help_args(
+    command: &str,
+    args: Option<String>,
+) -> Result<Option<String>, SlashCommandParseError> {
+    match normalize_optional_args(args.as_deref()) {
+        None | Some("list" | "help" | "-h" | "--help") => Ok(args),
+        Some(unexpected) => Err(command_error(
+            &format!(
+                "Unexpected arguments for /{command}: {unexpected}. Use /{command}, /{command} list, or /{command} help."
+            ),
+            command,
+            &format!("/{command} [list|help]"),
+        )),
+    }
+}
+
+fn usage_error(command: &str, argument_hint: &str) -> SlashCommandParseError {
+    let usage = format!("/{command} {argument_hint}");
+    let usage = usage.trim_end().to_string();
+    command_error(
+        &format!("Usage: {usage}"),
+        command_root_name(command),
+        &usage,
+    )
+}
+
+fn command_error(message: &str, command: &str, usage: &str) -> SlashCommandParseError {
+    let detail = render_slash_command_help_detail(command)
+        .map(|detail| format!("\n\n{detail}"))
+        .unwrap_or_default();
+    SlashCommandParseError::new(format!("{message}\n  Usage            {usage}{detail}"))
+}
+
 fn remainder_after_command(input: &str, command: &str) -> Option<String> {
     input
         .trim()
@@ -379,6 +728,56 @@ fn remainder_after_command(input: &str, command: &str) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn find_slash_command_spec(name: &str) -> Option<&'static SlashCommandSpec> {
+    slash_command_specs().iter().find(|spec| {
+        spec.name.eq_ignore_ascii_case(name)
+            || spec
+                .aliases
+                .iter()
+                .any(|alias| alias.eq_ignore_ascii_case(name))
+    })
+}
+
+fn command_root_name(command: &str) -> &str {
+    command.split_whitespace().next().unwrap_or(command)
+}
+
+fn slash_command_usage(spec: &SlashCommandSpec) -> String {
+    match spec.argument_hint {
+        Some(argument_hint) => format!("/{} {argument_hint}", spec.name),
+        None => format!("/{}", spec.name),
+    }
+}
+
+fn slash_command_detail_lines(spec: &SlashCommandSpec) -> Vec<String> {
+    let mut lines = vec![format!("/{}", spec.name)];
+    lines.push(format!("  Summary          {}", spec.summary));
+    lines.push(format!("  Usage            {}", slash_command_usage(spec)));
+    lines.push(format!(
+        "  Category         {}",
+        slash_command_category(spec.name)
+    ));
+    if !spec.aliases.is_empty() {
+        lines.push(format!(
+            "  Aliases          {}",
+            spec.aliases
+                .iter()
+                .map(|alias| format!("/{alias}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if spec.resume_supported {
+        lines.push("  Resume           Supported with --resume SESSION.jsonl".to_string());
+    }
+    lines
+}
+
+#[must_use]
+pub fn render_slash_command_help_detail(name: &str) -> Option<String> {
+    find_slash_command_spec(name).map(|spec| slash_command_detail_lines(spec).join("\n"))
 }
 
 #[must_use]
@@ -407,10 +806,7 @@ fn slash_command_category(name: &str) -> &'static str {
 }
 
 fn format_slash_command_help_line(spec: &SlashCommandSpec) -> String {
-    let name = match spec.argument_hint {
-        Some(argument_hint) => format!("/{} {}", spec.name, argument_hint),
-        None => format!("/{}", spec.name),
-    };
+    let name = slash_command_usage(spec);
     let alias_suffix = if spec.aliases.is_empty() {
         String::new()
     } else {
@@ -428,7 +824,7 @@ fn format_slash_command_help_line(spec: &SlashCommandSpec) -> String {
     } else {
         ""
     };
-    format!("  {name:<20} {}{alias_suffix}{resume}", spec.summary)
+    format!("  {name:<66} {}{alias_suffix}{resume}", spec.summary)
 }
 
 fn levenshtein_distance(left: &str, right: &str) -> usize {
@@ -509,8 +905,8 @@ pub fn suggest_slash_commands(input: &str, limit: usize) -> Vec<String> {
 pub fn render_slash_command_help() -> String {
     let mut lines = vec![
         "Slash commands".to_string(),
-        "  Start here       /status, /diff, /agents, /skills, /commit".to_string(),
-        "  [resume] means the command also works with --resume SESSION.jsonl".to_string(),
+        "  Start here        /status, /diff, /agents, /skills, /commit".to_string(),
+        "  [resume]          also works with --resume SESSION.jsonl".to_string(),
         String::new(),
     ];
 
@@ -1253,7 +1649,7 @@ fn normalize_optional_args(args: Option<&str>) -> Option<&str> {
 fn render_agents_usage(unexpected: Option<&str>) -> String {
     let mut lines = vec![
         "Agents".to_string(),
-        "  Usage            /agents".to_string(),
+        "  Usage            /agents [list|help]".to_string(),
         "  Direct CLI       claw agents".to_string(),
         "  Sources          .codex/agents, .claude/agents, $CODEX_HOME/agents".to_string(),
     ];
@@ -1266,7 +1662,7 @@ fn render_agents_usage(unexpected: Option<&str>) -> String {
 fn render_skills_usage(unexpected: Option<&str>) -> String {
     let mut lines = vec![
         "Skills".to_string(),
-        "  Usage            /skills".to_string(),
+        "  Usage            /skills [list|help]".to_string(),
         "  Direct CLI       claw skills".to_string(),
         "  Sources          .codex/skills, .claude/skills, legacy /commands".to_string(),
     ];
@@ -1282,7 +1678,18 @@ pub fn handle_slash_command(
     session: &Session,
     compaction: CompactionConfig,
 ) -> Option<SlashCommandResult> {
-    match SlashCommand::parse(input)? {
+    let command = match validate_slash_command_input(input) {
+        Ok(Some(command)) => command,
+        Ok(None) => return None,
+        Err(error) => {
+            return Some(SlashCommandResult {
+                message: error.to_string(),
+                session: session.clone(),
+            });
+        }
+    };
+
+    match command {
         SlashCommand::Compact => {
             let result = compact_session(session, compaction);
             let message = if result.removed_message_count == 0 {
@@ -1335,8 +1742,9 @@ mod tests {
     use super::{
         handle_plugins_slash_command, handle_slash_command, load_agents_from_roots,
         load_skills_from_roots, render_agents_report, render_plugins_report, render_skills_report,
-        render_slash_command_help, resume_supported_slash_commands, slash_command_specs,
-        suggest_slash_commands, DefinitionSource, SkillOrigin, SkillRoot, SlashCommand,
+        render_slash_command_help, render_slash_command_help_detail,
+        resume_supported_slash_commands, slash_command_specs, suggest_slash_commands,
+        validate_slash_command_input, DefinitionSource, SkillOrigin, SkillRoot, SlashCommand,
     };
     use plugins::{PluginKind, PluginManager, PluginManagerConfig, PluginMetadata, PluginSummary};
     use runtime::{CompactionConfig, ContentBlock, ConversationMessage, MessageRole, Session};
@@ -1403,6 +1811,12 @@ mod tests {
             format!("---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n"),
         )
         .expect("write command");
+    }
+
+    fn parse_error_message(input: &str) -> String {
+        validate_slash_command_input(input)
+            .expect_err("slash command should be rejected")
+            .to_string()
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1577,10 +1991,92 @@ mod tests {
     }
 
     #[test]
+    fn rejects_unexpected_arguments_for_no_arg_commands() {
+        // given
+        let input = "/compact now";
+
+        // when
+        let error = parse_error_message(input);
+
+        // then
+        assert!(error.contains("Unexpected arguments for /compact."));
+        assert!(error.contains("  Usage            /compact"));
+        assert!(error.contains("  Summary          Compact local session history"));
+    }
+
+    #[test]
+    fn rejects_invalid_argument_values() {
+        // given
+        let input = "/permissions admin";
+
+        // when
+        let error = parse_error_message(input);
+
+        // then
+        assert!(error.contains(
+            "Unsupported /permissions mode 'admin'. Use read-only, workspace-write, or danger-full-access."
+        ));
+        assert!(error.contains(
+            "  Usage            /permissions [read-only|workspace-write|danger-full-access]"
+        ));
+    }
+
+    #[test]
+    fn rejects_missing_required_arguments() {
+        // given
+        let input = "/teleport";
+
+        // when
+        let error = parse_error_message(input);
+
+        // then
+        assert!(error.contains("Usage: /teleport <symbol-or-path>"));
+        assert!(error.contains("  Category         Discovery & debugging"));
+    }
+
+    #[test]
+    fn rejects_invalid_session_and_plugin_shapes() {
+        // given
+        let session_input = "/session switch";
+        let plugin_input = "/plugins list extra";
+
+        // when
+        let session_error = parse_error_message(session_input);
+        let plugin_error = parse_error_message(plugin_input);
+
+        // then
+        assert!(session_error.contains("Usage: /session switch <session-id>"));
+        assert!(session_error.contains("/session"));
+        assert!(plugin_error.contains("Usage: /plugin list"));
+        assert!(plugin_error.contains("Aliases          /plugins, /marketplace"));
+    }
+
+    #[test]
+    fn rejects_invalid_agents_and_skills_arguments() {
+        // given
+        let agents_input = "/agents show planner";
+        let skills_input = "/skills show help";
+
+        // when
+        let agents_error = parse_error_message(agents_input);
+        let skills_error = parse_error_message(skills_input);
+
+        // then
+        assert!(agents_error.contains(
+            "Unexpected arguments for /agents: show planner. Use /agents, /agents list, or /agents help."
+        ));
+        assert!(agents_error.contains("  Usage            /agents [list|help]"));
+        assert!(skills_error.contains(
+            "Unexpected arguments for /skills: show help. Use /skills, /skills list, or /skills help."
+        ));
+        assert!(skills_error.contains("  Usage            /skills [list|help]"));
+    }
+
+    #[test]
     fn renders_help_from_shared_specs() {
         let help = render_slash_command_help();
-        assert!(help.contains("Start here       /status, /diff, /agents, /skills, /commit"));
-        assert!(help.contains("works with --resume SESSION.jsonl"));
+        assert!(help.contains("Start here        /status, /diff, /agents, /skills, /commit"));
+        assert!(help.contains("[resume]          also works with --resume SESSION.jsonl"));
         assert!(help.contains("Session & visibility"));
         assert!(help.contains("Workspace & git"));
         assert!(help.contains("Discovery & debugging"));
@@ -1613,10 +2109,58 @@ mod tests {
             "/plugin [list|install <path>|enable <name>|disable <name>|uninstall <id>|update <id>]"
         ));
         assert!(help.contains("aliases: /plugins, /marketplace"));
-        assert!(help.contains("/agents"));
-        assert!(help.contains("/skills"));
+        assert!(help.contains("/agents [list|help]"));
+        assert!(help.contains("/skills [list|help]"));
         assert_eq!(slash_command_specs().len(), 26);
         assert_eq!(resume_supported_slash_commands().len(), 14);
+    }
+
+    #[test]
+    fn renders_per_command_help_detail() {
+        // given
+        let command = "plugins";
+
+        // when
+        let help = render_slash_command_help_detail(command).expect("detail help should exist");
+
+        // then
+        assert!(help.contains("/plugin"));
+        assert!(help.contains("Summary          Manage Claw Code plugins"));
+        assert!(help.contains("Aliases          /plugins, /marketplace"));
+        assert!(help.contains("Category         Workspace & git"));
+    }
+
+    #[test]
+    fn renders_agents_and_skills_help_with_list_and_help_usage() {
+        // given
+        let agents = render_slash_command_help_detail("agents").expect("agents help should exist");
+        let skills = render_slash_command_help_detail("skills").expect("skills help should exist");
+
+        // when
+        // then
+        assert!(agents.contains("Usage            /agents [list|help]"));
+        assert!(skills.contains("Usage            /skills [list|help]"));
+    }
+
+    #[test]
+    fn validate_slash_command_input_rejects_extra_single_value_arguments() {
+        // given
+        let session_input = "/session switch current next";
+        let plugin_input = "/plugin enable demo extra";
+
+        // when
+        let session_error = validate_slash_command_input(session_input)
+            .expect_err("session input should be rejected")
+            .to_string();
+        let plugin_error = validate_slash_command_input(plugin_input)
+            .expect_err("plugin input should be rejected")
+            .to_string();
+
+        // then
+        assert!(session_error.contains("Unexpected arguments for /session switch."));
+        assert!(session_error.contains("  Usage            /session switch <session-id>"));
+        assert!(plugin_error.contains("Unexpected arguments for /plugin enable."));
+        assert!(plugin_error.contains("  Usage            /plugin enable <name>"));
     }
 
     #[test]
@@ -1886,7 +2430,7 @@ mod tests {
 
         let agents_help =
             super::handle_agents_slash_command(Some("help"), &cwd).expect("agents help");
-        assert!(agents_help.contains("Usage            /agents"));
+        assert!(agents_help.contains("Usage            /agents [list|help]"));
         assert!(agents_help.contains("Direct CLI       claw agents"));
 
         let agents_unexpected =
@@ -1895,7 +2439,7 @@ mod tests {
 
         let skills_help =
             super::handle_skills_slash_command(Some("--help"), &cwd).expect("skills help");
-        assert!(skills_help.contains("Usage            /skills"));
+        assert!(skills_help.contains("Usage            /skills [list|help]"));
         assert!(skills_help.contains("legacy /commands"));
 
         let skills_unexpected =
