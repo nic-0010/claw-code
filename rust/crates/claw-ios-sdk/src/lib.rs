@@ -11,6 +11,15 @@ use tools::{ios_tool_definitions, IosToolExecutor};
 
 // ── Public types exposed to Swift ──────────────────────────────────────────
 
+const RAG_SYSTEM_PROMPT: &str = "\
+You have access to read_file, glob_search, and grep_search tools.\n\
+When answering questions about documents or files:\n\
+1. First use glob_search to find relevant files\n\
+2. Use grep_search to locate specific sections\n\
+3. Read only the relevant chunks with read_file (use offset and limit parameters)\n\
+4. Answer based only on what the documents say\n\
+5. If unsure, say \"I don't know\" rather than guessing";
+
 /// Configuration for a Claw iOS session.
 #[derive(uniffi::Record, Clone, Debug)]
 pub struct ClawIosConfig {
@@ -19,6 +28,9 @@ pub struct ClawIosConfig {
     pub system_prompt: Option<String>,
     pub base_url: Option<String>,
     pub enable_file_tools: bool,
+    /// When true, automatically enables file tools and prepends a RAG-oriented
+    /// system prompt instructing the model to use glob/grep/read for retrieval.
+    pub enable_rag_mode: bool,
 }
 
 /// A single streaming event produced during a conversation turn.
@@ -94,11 +106,8 @@ impl ClawIosSession {
             })?
             .clone();
 
-        let tool_defs = if self.config.enable_file_tools {
-            ios_tool_definitions()
-        } else {
-            Vec::new()
-        };
+        let use_file_tools = self.config.enable_file_tools || self.config.enable_rag_mode;
+        let tool_defs = if use_file_tools { ios_tool_definitions() } else { Vec::new() };
 
         // Collect events into a shared buffer that the client writes to.
         let event_buf: Arc<Mutex<Vec<IosEvent>>> = Arc::new(Mutex::new(Vec::new()));
@@ -114,12 +123,15 @@ impl ClawIosSession {
 
         let tool_executor = IosToolExecutor::new();
         let policy = PermissionPolicy::new(PermissionMode::DangerFullAccess);
-        let system_prompt = self
+        let mut system_prompt: Vec<String> = self
             .config
             .system_prompt
             .as_deref()
             .map(|s| vec![s.to_string()])
             .unwrap_or_default();
+        if self.config.enable_rag_mode {
+            system_prompt.push(RAG_SYSTEM_PROMPT.to_string());
+        }
 
         let mut runtime = ConversationRuntime::new(
             session_snapshot,

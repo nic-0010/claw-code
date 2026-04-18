@@ -23,14 +23,16 @@ public final class ClawSession: ObservableObject {
         apiKey: String,
         model: String = "claude-opus-4-6",
         systemPrompt: String? = nil,
-        enableFileTools: Bool = false
+        enableFileTools: Bool = false,
+        enableRagMode: Bool = false
     ) throws {
         let config = ClawIosConfig(
             apiKey: apiKey,
             model: model,
             systemPrompt: systemPrompt,
             baseUrl: nil,
-            enableFileTools: enableFileTools
+            enableFileTools: enableFileTools,
+            enableRagMode: enableRagMode
         )
         self.inner = try ClawIosSession(config: config)
     }
