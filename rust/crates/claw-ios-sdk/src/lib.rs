@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use client::IosApiClient;
 use runtime::{ConversationRuntime, PermissionMode, PermissionPolicy, Session};
-use tools::{ios_tool_definitions, IosToolExecutor};
+use tools::{ios_file_tool_definitions, web_tool_definitions, IosToolExecutor};
 
 // ── Public types exposed to Swift ──────────────────────────────────────────
 
@@ -20,6 +20,15 @@ When answering questions about documents or files:\n\
 4. Answer based only on what the documents say\n\
 5. If unsure, say \"I don't know\" rather than guessing";
 
+const WEB_TOOLS_SYSTEM_PROMPT: &str = "\
+You have access to web_search and fetch_url tools for real-time information retrieval.\n\
+When answering questions that require current data, news, prices, or research:\n\
+1. Use web_search to find relevant sources and get a synthesized answer\n\
+2. Use fetch_url to read the full content of specific pages when needed\n\
+3. Cross-reference multiple sources for accuracy\n\
+4. Always cite sources with their URLs in your response\n\
+5. For complex tasks like business plans or financial analysis, search for recent data first";
+
 /// Configuration for a Claw iOS session.
 #[derive(uniffi::Record, Clone, Debug)]
 pub struct ClawIosConfig {
@@ -31,6 +40,12 @@ pub struct ClawIosConfig {
     /// When true, automatically enables file tools and prepends a RAG-oriented
     /// system prompt instructing the model to use glob/grep/read for retrieval.
     pub enable_rag_mode: bool,
+    /// When true, enables web_search and fetch_url tools so the agent can
+    /// browse the internet for current information.
+    pub enable_web_tools: bool,
+    /// Tavily API key required when enable_web_tools is true.
+    /// Get one for free at https://tavily.com
+    pub search_api_key: Option<String>,
 }
 
 /// A single streaming event produced during a conversation turn.
@@ -106,8 +121,13 @@ impl ClawIosSession {
             })?
             .clone();
 
-        let use_file_tools = self.config.enable_file_tools || self.config.enable_rag_mode;
-        let tool_defs = if use_file_tools { ios_tool_definitions() } else { Vec::new() };
+        let mut tool_defs = Vec::new();
+        if self.config.enable_file_tools || self.config.enable_rag_mode {
+            tool_defs.extend(ios_file_tool_definitions());
+        }
+        if self.config.enable_web_tools {
+            tool_defs.extend(web_tool_definitions());
+        }
 
         // Collect events into a shared buffer that the client writes to.
         let event_buf: Arc<Mutex<Vec<IosEvent>>> = Arc::new(Mutex::new(Vec::new()));
@@ -121,7 +141,7 @@ impl ClawIosSession {
         )
         .map_err(|msg| IosError::Config { msg })?;
 
-        let tool_executor = IosToolExecutor::new();
+        let tool_executor = IosToolExecutor::new(self.config.search_api_key.clone());
         let policy = PermissionPolicy::new(PermissionMode::DangerFullAccess);
         let mut system_prompt: Vec<String> = self
             .config
@@ -131,6 +151,9 @@ impl ClawIosSession {
             .unwrap_or_default();
         if self.config.enable_rag_mode {
             system_prompt.push(RAG_SYSTEM_PROMPT.to_string());
+        }
+        if self.config.enable_web_tools {
+            system_prompt.push(WEB_TOOLS_SYSTEM_PROMPT.to_string());
         }
 
         let mut runtime = ConversationRuntime::new(

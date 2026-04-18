@@ -24,7 +24,9 @@ public final class ClawSession: ObservableObject {
         model: String = "claude-opus-4-6",
         systemPrompt: String? = nil,
         enableFileTools: Bool = false,
-        enableRagMode: Bool = false
+        enableRagMode: Bool = false,
+        enableWebTools: Bool = false,
+        searchApiKey: String? = nil
     ) throws {
         let config = ClawIosConfig(
             apiKey: apiKey,
@@ -32,7 +34,9 @@ public final class ClawSession: ObservableObject {
             systemPrompt: systemPrompt,
             baseUrl: nil,
             enableFileTools: enableFileTools,
-            enableRagMode: enableRagMode
+            enableRagMode: enableRagMode,
+            enableWebTools: enableWebTools,
+            searchApiKey: searchApiKey
         )
         self.inner = try ClawIosSession(config: config)
     }
