@@ -3,26 +3,32 @@ use runtime::{
 };
 use serde::Deserialize;
 
+use crate::memory;
+
 pub struct IosToolExecutor {
     search_api_key: Option<String>,
+    firecrawl_api_key: Option<String>,
+    memory_path: Option<String>,
 }
 
 impl IosToolExecutor {
-    pub fn new(search_api_key: Option<String>) -> Self {
-        Self { search_api_key }
+    pub fn new(
+        search_api_key: Option<String>,
+        firecrawl_api_key: Option<String>,
+        memory_path: Option<String>,
+    ) -> Self {
+        Self { search_api_key, firecrawl_api_key, memory_path }
     }
 }
 
 impl ToolExecutor for IosToolExecutor {
     fn execute(&mut self, tool_name: &str, input: &str) -> Result<String, ToolError> {
         match tool_name {
+            // ── File tools ────────────────────────────────────────────────
+
             "read_file" => {
                 #[derive(Deserialize)]
-                struct Args {
-                    path: String,
-                    offset: Option<usize>,
-                    limit: Option<usize>,
-                }
+                struct Args { path: String, offset: Option<usize>, limit: Option<usize> }
                 let args: Args = serde_json::from_str(input)
                     .map_err(|e| ToolError::new(format!("invalid input: {e}")))?;
                 let result = read_file(&args.path, args.offset, args.limit)
@@ -32,10 +38,7 @@ impl ToolExecutor for IosToolExecutor {
 
             "write_file" => {
                 #[derive(Deserialize)]
-                struct Args {
-                    path: String,
-                    content: String,
-                }
+                struct Args { path: String, content: String }
                 let args: Args = serde_json::from_str(input)
                     .map_err(|e| ToolError::new(format!("invalid input: {e}")))?;
                 let result = runtime::write_file(&args.path, &args.content)
@@ -46,17 +49,13 @@ impl ToolExecutor for IosToolExecutor {
             "edit_file" => {
                 #[derive(Deserialize)]
                 struct Args {
-                    path: String,
-                    old_string: String,
-                    new_string: String,
+                    path: String, old_string: String, new_string: String,
                     replace_all: Option<bool>,
                 }
                 let args: Args = serde_json::from_str(input)
                     .map_err(|e| ToolError::new(format!("invalid input: {e}")))?;
                 let result = edit_file(
-                    &args.path,
-                    &args.old_string,
-                    &args.new_string,
+                    &args.path, &args.old_string, &args.new_string,
                     args.replace_all.unwrap_or(false),
                 )
                 .map_err(|e| ToolError::new(e.to_string()))?;
@@ -65,10 +64,7 @@ impl ToolExecutor for IosToolExecutor {
 
             "glob_search" => {
                 #[derive(Deserialize)]
-                struct Args {
-                    pattern: String,
-                    path: Option<String>,
-                }
+                struct Args { pattern: String, path: Option<String> }
                 let args: Args = serde_json::from_str(input)
                     .map_err(|e| ToolError::new(format!("invalid input: {e}")))?;
                 let result = glob_search(&args.pattern, args.path.as_deref())
@@ -79,47 +75,69 @@ impl ToolExecutor for IosToolExecutor {
             "grep_search" => {
                 let args: GrepSearchInput = serde_json::from_str(input)
                     .map_err(|e| ToolError::new(format!("invalid input: {e}")))?;
-                let result =
-                    grep_search(&args).map_err(|e| ToolError::new(e.to_string()))?;
+                let result = grep_search(&args).map_err(|e| ToolError::new(e.to_string()))?;
                 serde_json::to_string(&result).map_err(|e| ToolError::new(e.to_string()))
             }
 
+            // ── Web tools ─────────────────────────────────────────────────
+
             "web_search" => {
                 #[derive(Deserialize)]
-                struct Args {
-                    query: String,
-                    num_results: Option<u32>,
-                }
+                struct Args { query: String, num_results: Option<u32> }
                 let args: Args = serde_json::from_str(input)
                     .map_err(|e| ToolError::new(format!("invalid input: {e}")))?;
                 let api_key = self.search_api_key.as_deref().unwrap_or("");
                 if api_key.is_empty() {
-                    return Err(ToolError::new(
-                        "search_api_key is required for web_search (get one at tavily.com)",
-                    ));
+                    return Err(ToolError::new("search_api_key required (get one at tavily.com)"));
                 }
                 web_search(&args.query, args.num_results.unwrap_or(5), api_key)
             }
 
             "fetch_url" => {
                 #[derive(Deserialize)]
-                struct Args {
-                    url: String,
-                    timeout_secs: Option<u64>,
-                }
+                struct Args { url: String, timeout_secs: Option<u64> }
                 let args: Args = serde_json::from_str(input)
                     .map_err(|e| ToolError::new(format!("invalid input: {e}")))?;
-                fetch_url(&args.url, args.timeout_secs.unwrap_or(30))
+                fetch_url(&args.url, args.timeout_secs.unwrap_or(30),
+                    self.firecrawl_api_key.as_deref())
             }
 
-            other => Err(ToolError::new(format!(
-                "tool '{other}' is not available on iOS"
-            ))),
+            // ── Memory tools ──────────────────────────────────────────────
+
+            "memory_save" => {
+                #[derive(Deserialize)]
+                struct Args { key: String, value: String }
+                let args: Args = serde_json::from_str(input)
+                    .map_err(|e| ToolError::new(format!("invalid input: {e}")))?;
+                memory::save(self.memory_path.as_deref(), &args.key, &args.value)
+                    .map_err(ToolError::new)
+            }
+
+            "memory_search" => {
+                #[derive(Deserialize)]
+                struct Args { query: String }
+                let args: Args = serde_json::from_str(input)
+                    .map_err(|e| ToolError::new(format!("invalid input: {e}")))?;
+                Ok(memory::search(self.memory_path.as_deref(), &args.query))
+            }
+
+            "memory_list" => Ok(memory::list(self.memory_path.as_deref())),
+
+            "memory_delete" => {
+                #[derive(Deserialize)]
+                struct Args { key: String }
+                let args: Args = serde_json::from_str(input)
+                    .map_err(|e| ToolError::new(format!("invalid input: {e}")))?;
+                memory::delete(self.memory_path.as_deref(), &args.key)
+                    .map_err(ToolError::new)
+            }
+
+            other => Err(ToolError::new(format!("tool '{other}' is not available on iOS"))),
         }
     }
 }
 
-// ── Async helper ─────────────────────────────────────────────────────────────
+// ── Async helper ──────────────────────────────────────────────────────────────
 
 fn run_async<F>(fut: F) -> Result<String, ToolError>
 where
@@ -133,7 +151,7 @@ where
         .map_err(ToolError::new)
 }
 
-// ── Web tools ─────────────────────────────────────────────────────────────────
+// ── Web implementations ───────────────────────────────────────────────────────
 
 fn web_search(query: &str, num_results: u32, api_key: &str) -> Result<String, ToolError> {
     let query = query.to_string();
@@ -158,12 +176,12 @@ fn web_search(query: &str, num_results: u32, api_key: &str) -> Result<String, To
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            return Err(format!("Tavily API error {status}: {text}"));
+            return Err(format!("Tavily error {status}: {text}"));
         }
 
         let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-
         let mut out = String::new();
+
         if let Some(answer) = json["answer"].as_str().filter(|s| !s.is_empty()) {
             out.push_str(&format!("Answer: {answer}\n\n"));
         }
@@ -179,8 +197,15 @@ fn web_search(query: &str, num_results: u32, api_key: &str) -> Result<String, To
     })
 }
 
-fn fetch_url(url: &str, timeout_secs: u64) -> Result<String, ToolError> {
-    // Jina Reader converts any URL (including JS-rendered pages) to clean text.
+fn fetch_url(url: &str, timeout_secs: u64, firecrawl_key: Option<&str>) -> Result<String, ToolError> {
+    if let Some(key) = firecrawl_key {
+        fetch_via_firecrawl(url, timeout_secs, key)
+    } else {
+        fetch_via_jina(url, timeout_secs)
+    }
+}
+
+fn fetch_via_jina(url: &str, timeout_secs: u64) -> Result<String, ToolError> {
     let jina_url = format!("https://r.jina.ai/{url}");
     run_async(async move {
         let client = reqwest::Client::builder()
@@ -201,15 +226,44 @@ fn fetch_url(url: &str, timeout_secs: u64) -> Result<String, ToolError> {
         }
 
         let text = resp.text().await.map_err(|e| e.to_string())?;
-        if text.len() > 50_000 {
-            Ok(format!(
-                "{}\n\n[Content truncated at 50,000 characters]",
-                &text[..50_000]
-            ))
-        } else {
-            Ok(text)
-        }
+        Ok(truncate(text, 50_000))
     })
+}
+
+fn fetch_via_firecrawl(url: &str, timeout_secs: u64, api_key: &str) -> Result<String, ToolError> {
+    let url = url.to_string();
+    let api_key = api_key.to_string();
+    run_async(async move {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(timeout_secs))
+            .build()
+            .map_err(|e| e.to_string())?;
+
+        let body = serde_json::json!({ "url": url, "formats": ["markdown"] });
+        let resp = client
+            .post("https://api.firecrawl.dev/v1/scrape")
+            .header("Authorization", format!("Bearer {api_key}"))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if !resp.status().is_success() {
+            return Err(format!("Firecrawl error: HTTP {}", resp.status()));
+        }
+
+        let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+        let markdown = json["data"]["markdown"].as_str().unwrap_or("").to_string();
+        Ok(truncate(markdown, 50_000))
+    })
+}
+
+fn truncate(s: String, max: usize) -> String {
+    if s.len() > max {
+        format!("{}\n\n[Content truncated at {max} characters]", &s[..max])
+    } else {
+        s
+    }
 }
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
@@ -222,9 +276,9 @@ pub fn ios_file_tool_definitions() -> Vec<api::ToolDefinition> {
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "path":   { "type": "string",  "description": "Absolute path to the file" },
-                    "offset": { "type": "integer", "description": "Line to start from (1-based)" },
-                    "limit":  { "type": "integer", "description": "Maximum lines to read" }
+                    "path":   { "type": "string",  "description": "Absolute path" },
+                    "offset": { "type": "integer", "description": "Start line (1-based)" },
+                    "limit":  { "type": "integer", "description": "Max lines to read" }
                 },
                 "required": ["path"]
             }
@@ -317,4 +371,3 @@ pub fn web_tool_definitions() -> Vec<api::ToolDefinition> {
     ]))
     .unwrap_or_default()
 }
-

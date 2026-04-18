@@ -7,9 +7,15 @@ import Foundation
 ///
 /// Usage:
 /// ```swift
-/// let session = try ClawSession(apiKey: "sk-ant-...", model: "claude-opus-4-6")
-/// let result  = try await session.send("Hello!")
-/// print(result)
+/// let session = try ClawSession(
+///     apiKey: "sk-ant-...",
+///     enableWebTools: true,
+///     searchApiKey: "tvly-...",
+///     enableMemory: true,
+///     memoryPath: documentsPath,
+///     agentMode: .research
+/// )
+/// let text = try await session.send("Analyze the AI agent market in 2026")
 /// ```
 @MainActor
 public final class ClawSession: ObservableObject {
@@ -26,7 +32,11 @@ public final class ClawSession: ObservableObject {
         enableFileTools: Bool = false,
         enableRagMode: Bool = false,
         enableWebTools: Bool = false,
-        searchApiKey: String? = nil
+        enableMemory: Bool = false,
+        searchApiKey: String? = nil,
+        firecrawlApiKey: String? = nil,
+        memoryPath: String? = nil,
+        agentMode: AgentMode = .general
     ) throws {
         let config = ClawIosConfig(
             apiKey: apiKey,
@@ -36,46 +46,41 @@ public final class ClawSession: ObservableObject {
             enableFileTools: enableFileTools,
             enableRagMode: enableRagMode,
             enableWebTools: enableWebTools,
-            searchApiKey: searchApiKey
+            enableMemory: enableMemory,
+            searchApiKey: searchApiKey,
+            firecrawlApiKey: firecrawlApiKey,
+            memoryPath: memoryPath,
+            agentMode: agentMode
         )
         self.inner = try ClawIosSession(config: config)
     }
 
+    /// Switch the agent specialization mode without clearing conversation history.
+    public func setMode(_ mode: AgentMode) {
+        inner.setAgentMode(mode: mode)
+    }
+
     /// Send a user message and return the full assistant reply.
-    /// The session history is updated automatically.
-    ///
-    /// This method runs the blocking Rust call on a background thread
-    /// so it is safe to await from the main actor.
     @discardableResult
     public func send(_ text: String) async throws -> String {
         let userMsg = ClawMessage(role: .user, text: text)
         messages.append(userMsg)
-
-        // Placeholder for the assistant reply (updated below)
         let assistantMsg = ClawMessage(role: .assistant, text: "")
         messages.append(assistantMsg)
         isThinking = true
-
         defer { isThinking = false }
 
         let result: TurnResult = try await Task.detached(priority: .userInitiated) { [inner] in
             try inner.sendTurn(prompt: text)
         }.value
 
-        // Update the placeholder with the real text
         if let idx = messages.indices.last {
             messages[idx].text = result.text
         }
-
         return result.text
     }
 
-    /// Stream an assistant reply chunk-by-chunk via an AsyncStream.
-    ///
-    /// Since the Rust layer is synchronous, the chunks are delivered
-    /// all at once when the turn completes. The stream still yields
-    /// each event separately so the UI can be updated progressively
-    /// without changes once true streaming is wired up.
+    /// Stream an assistant reply chunk-by-chunk via an AsyncThrowingStream.
     public func stream(_ text: String) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let userMsg = ClawMessage(role: .user, text: text)
@@ -88,13 +93,9 @@ public final class ClawSession: ObservableObject {
             }
 
             Task.detached(priority: .userInitiated) { [weak self, inner = self.inner] in
-                defer {
-                    Task { @MainActor in self?.isThinking = false }
-                }
-
+                defer { Task { @MainActor in self?.isThinking = false } }
                 do {
                     let result = try inner.sendTurn(prompt: text)
-
                     for event in result.events {
                         if case .textDelta(let chunk) = event {
                             continuation.yield(chunk)
@@ -117,6 +118,30 @@ public final class ClawSession: ObservableObject {
     public func reset() {
         inner.clearHistory()
         messages.removeAll()
+    }
+}
+
+// MARK: - Convenience factory
+
+public extension ClawSession {
+    /// Create a fully autonomous session with web search, memory, and a chosen mode.
+    /// Pass the app's Documents directory path for persistent memory storage.
+    static func autonomous(
+        apiKey: String,
+        searchApiKey: String,
+        documentsPath: String,
+        firecrawlApiKey: String? = nil,
+        mode: AgentMode = .general
+    ) throws -> ClawSession {
+        try ClawSession(
+            apiKey: apiKey,
+            enableWebTools: true,
+            enableMemory: true,
+            searchApiKey: searchApiKey,
+            firecrawlApiKey: firecrawlApiKey,
+            memoryPath: documentsPath,
+            agentMode: mode
+        )
     }
 }
 

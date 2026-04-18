@@ -4,16 +4,21 @@ import ClawSDKWrapper
 struct ContentView: View {
     @StateObject private var session: ClawSession
     @State private var inputText = ""
-    @State private var scrollProxy: ScrollViewProxy?
     @State private var exportMessage: ClawMessage?
+    @State private var selectedMode: AgentMode = .general
+
+    private static let documentsPath =
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+            .first?.path ?? NSTemporaryDirectory()
 
     init() {
-        let s = try! ClawSession(
-            apiKey: ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? "",
-            model: "claude-opus-4-6",
-            systemPrompt: "You are a helpful assistant running on an iPhone.",
-            enableWebTools: ProcessInfo.processInfo.environment["TAVILY_API_KEY"] != nil,
-            searchApiKey: ProcessInfo.processInfo.environment["TAVILY_API_KEY"]
+        let env = ProcessInfo.processInfo.environment
+        let s = try! ClawSession.autonomous(
+            apiKey: env["ANTHROPIC_API_KEY"] ?? "",
+            searchApiKey: env["TAVILY_API_KEY"] ?? "",
+            documentsPath: Self.documentsPath,
+            firecrawlApiKey: env["FIRECRAWL_API_KEY"],
+            mode: .general
         )
         _session = StateObject(wrappedValue: s)
     }
@@ -21,6 +26,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                modePicker
                 messageList
                 if let error = session.lastError {
                     Text(error)
@@ -35,14 +41,41 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { session.reset() }) {
+                    Button { session.reset() } label: {
                         Image(systemName: "square.and.pencil")
                     }
                 }
             }
         }
         .sheet(item: $exportMessage) { msg in
-            ShareSheet(items: [pdfData(for: msg)])
+            ShareSheet(items: [ClawPDFExporter.export(text: msg.text, title: modeName)])
+        }
+    }
+
+    // MARK: - Mode picker
+
+    private var modePicker: some View {
+        Picker("Mode", selection: $selectedMode) {
+            Text("General").tag(AgentMode.general)
+            Text("Research").tag(AgentMode.research)
+            Text("Writing").tag(AgentMode.writing)
+            Text("Analysis").tag(AgentMode.analysis)
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal)
+        .padding(.vertical, 6)
+        .background(Color(.secondarySystemBackground))
+        .onChange(of: selectedMode) { mode in
+            session.setMode(mode)
+        }
+    }
+
+    private var modeName: String {
+        switch selectedMode {
+        case .general:  return "Claw Response"
+        case .research: return "Research Report"
+        case .writing:  return "Document"
+        case .analysis: return "Analysis"
         }
     }
 
@@ -54,9 +87,7 @@ struct ContentView: View {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     ForEach(session.messages) { message in
                         MessageBubble(message: message) {
-                            if message.role == .assistant {
-                                exportMessage = message
-                            }
+                            if message.role == .assistant { exportMessage = message }
                         }
                         .id(message.id)
                     }
@@ -67,8 +98,11 @@ struct ContentView: View {
                 }
                 .padding()
             }
-            .onAppear { scrollProxy = proxy }
-            .onChange(of: session.messages.count) { _ in scrollToBottom(proxy) }
+            .onChange(of: session.messages.count) { _ in
+                if let last = session.messages.last {
+                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
         }
     }
 
@@ -76,7 +110,7 @@ struct ContentView: View {
 
     private var inputBar: some View {
         HStack(spacing: 8) {
-            TextField("Message", text: $inputText, axis: .vertical)
+            TextField(placeholder, text: $inputText, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(1...5)
                 .disabled(session.isThinking)
@@ -91,6 +125,15 @@ struct ContentView: View {
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(.regularMaterial)
+    }
+
+    private var placeholder: String {
+        switch selectedMode {
+        case .general:  return "Message"
+        case .research: return "What do you want to research?"
+        case .writing:  return "What do you want me to write?"
+        case .analysis: return "What do you want me to analyze?"
+        }
     }
 
     private var canSend: Bool {
@@ -110,16 +153,6 @@ struct ContentView: View {
                 session.lastError = error.localizedDescription
             }
         }
-    }
-
-    private func scrollToBottom(_ proxy: ScrollViewProxy) {
-        if let last = session.messages.last {
-            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-        }
-    }
-
-    private func pdfData(for message: ClawMessage) -> Data {
-        ClawPDFExporter.export(text: message.text, title: "Claw — Response")
     }
 }
 
