@@ -3,12 +3,13 @@ use runtime::{
 };
 use serde::Deserialize;
 
-use crate::memory;
+use crate::{financial, memory};
 
 pub struct IosToolExecutor {
     search_api_key: Option<String>,
     firecrawl_api_key: Option<String>,
     memory_path: Option<String>,
+    financial_server_url: Option<String>,
 }
 
 impl IosToolExecutor {
@@ -16,8 +17,9 @@ impl IosToolExecutor {
         search_api_key: Option<String>,
         firecrawl_api_key: Option<String>,
         memory_path: Option<String>,
+        financial_server_url: Option<String>,
     ) -> Self {
-        Self { search_api_key, firecrawl_api_key, memory_path }
+        Self { search_api_key, firecrawl_api_key, memory_path, financial_server_url }
     }
 }
 
@@ -130,6 +132,17 @@ impl ToolExecutor for IosToolExecutor {
                     .map_err(|e| ToolError::new(format!("invalid input: {e}")))?;
                 memory::delete(self.memory_path.as_deref(), &args.key)
                     .map_err(ToolError::new)
+            }
+
+            // ── Financial tools (delegated to tool_server.py) ─────────────
+
+            "get_stock_price" | "get_etf_info" | "confronta_portafoglio" => {
+                let url = self.financial_server_url.as_deref().ok_or_else(|| {
+                    ToolError::new("financial_server_url is not configured")
+                })?;
+                let body: serde_json::Value = serde_json::from_str(input)
+                    .unwrap_or(serde_json::json!({}));
+                financial::call_tool(url, tool_name, body)
             }
 
             other => Err(ToolError::new(format!("tool '{other}' is not available on iOS"))),

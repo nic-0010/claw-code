@@ -1,6 +1,7 @@
 uniffi::setup_scaffolding!();
 
 mod client;
+mod financial;
 mod memory;
 mod tools;
 
@@ -9,6 +10,7 @@ use std::sync::{Arc, Mutex};
 use client::IosApiClient;
 use runtime::{ConversationRuntime, PermissionMode, PermissionPolicy, Session};
 use tools::{ios_file_tool_definitions, web_tool_definitions, IosToolExecutor};
+use financial::tool_definitions as financial_tool_definitions;
 
 // ── System prompts ────────────────────────────────────────────────────────────
 
@@ -36,6 +38,14 @@ Use persistent memory to:\n\
 - Save important user preferences, project details, and key facts with memory_save\n\
 - Check existing memories before asking the user for information they may have shared before\n\
 - Proactively save new information that will be useful in future sessions";
+
+const FINANCIAL_TOOLS_SYSTEM_PROMPT: &str = "\
+You have access to financial data tools: get_stock_price, get_etf_info, confronta_portafoglio.\n\
+When answering questions about stocks, ETFs, or portfolios:\n\
+1. Fetch current data with get_stock_price or get_etf_info before answering\n\
+2. For comparisons, use confronta_portafoglio with all tickers at once\n\
+3. Always include the data source timestamp and note that prices may be delayed\n\
+4. Combine financial data with web_search for news and context when relevant";
 
 const RESEARCH_MODE_PROMPT: &str = "\
 You are an expert research assistant.\n\
@@ -103,6 +113,11 @@ pub struct ClawIosConfig {
     pub memory_path: Option<String>,
     /// Agent mode — sets a specialized system prompt.
     pub agent_mode: AgentMode,
+    /// Enable financial tools: get_stock_price, get_etf_info, confronta_portafoglio.
+    /// Requires financial_server_url pointing to a running tool_server.py instance.
+    pub enable_financial_tools: bool,
+    /// URL of the financial tool server, e.g. "http://192.168.1.10:5001".
+    pub financial_server_url: Option<String>,
 }
 
 /// A single streaming event produced during a conversation turn.
@@ -181,6 +196,9 @@ impl ClawIosSession {
         if self.config.enable_memory {
             tool_defs.extend(memory::tool_definitions());
         }
+        if self.config.enable_financial_tools {
+            tool_defs.extend(financial_tool_definitions());
+        }
 
         let event_buf: Arc<Mutex<Vec<IosEvent>>> = Arc::new(Mutex::new(Vec::new()));
 
@@ -197,6 +215,7 @@ impl ClawIosSession {
             self.config.search_api_key.clone(),
             self.config.firecrawl_api_key.clone(),
             self.config.memory_path.clone(),
+            self.config.financial_server_url.clone(),
         );
 
         let policy = PermissionPolicy::new(PermissionMode::DangerFullAccess);
@@ -225,6 +244,9 @@ impl ClawIosSession {
         }
         if self.config.enable_memory {
             system_prompt.push(MEMORY_SYSTEM_PROMPT.to_string());
+        }
+        if self.config.enable_financial_tools {
+            system_prompt.push(FINANCIAL_TOOLS_SYSTEM_PROMPT.to_string());
         }
 
         // Agent mode specialization.

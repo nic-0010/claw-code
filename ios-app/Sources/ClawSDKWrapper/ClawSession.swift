@@ -36,7 +36,9 @@ public final class ClawSession: ObservableObject {
         searchApiKey: String? = nil,
         firecrawlApiKey: String? = nil,
         memoryPath: String? = nil,
-        agentMode: AgentMode = .general
+        agentMode: AgentMode = .general,
+        enableFinancialTools: Bool = false,
+        financialServerUrl: String? = nil
     ) throws {
         let config = ClawIosConfig(
             apiKey: apiKey,
@@ -50,7 +52,9 @@ public final class ClawSession: ObservableObject {
             searchApiKey: searchApiKey,
             firecrawlApiKey: firecrawlApiKey,
             memoryPath: memoryPath,
-            agentMode: agentMode
+            agentMode: agentMode,
+            enableFinancialTools: enableFinancialTools,
+            financialServerUrl: financialServerUrl
         )
         self.inner = try ClawIosSession(config: config)
     }
