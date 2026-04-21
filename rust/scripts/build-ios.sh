@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # build-ios.sh — Build claw-ios-sdk as an XCFramework for iPhone and Simulator.
 #
-# Prerequisites (run on macOS with Xcode installed):
-#   rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
-#   cargo install uniffi-bindgen-swift  (or: cargo install uniffi-bindgen)
-#
-# Output:
-#   ./build/ClawIosSDK.xcframework    — drop into Xcode
-#   ./build/ClawIosSDK/               — generated Swift bindings
-#
 # Usage:
 #   cd rust/
-#   ./scripts/build-ios.sh [--release]
+#   ./scripts/build-ios.sh           # debug build
+#   ./scripts/build-ios.sh --release # release build (use for App Store / TestFlight)
+#
+# Prerequisites (macOS with Xcode installed):
+#   rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+#   cargo build  (first run compiles uniffi-bindgen from the workspace)
+#
+# Output:
+#   build/ClawIosSDK.xcframework       — drop into Xcode or referenced by Package.swift
+#   ios-app/Sources/ClawIosSDK/        — generated Swift bindings (auto-copied)
 
 set -euo pipefail
 
@@ -19,7 +20,9 @@ CRATE="claw-ios-sdk"
 LIB_NAME="claw_ios_sdk"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${WORKSPACE}/.." && pwd)"
 BUILD_DIR="${WORKSPACE}/build"
+IOS_SDK_SWIFT_DIR="${REPO_ROOT}/ios-app/Sources/ClawIosSDK"
 PROFILE="debug"
 CARGO_PROFILE_FLAG=""
 
@@ -32,16 +35,42 @@ for arg in "$@"; do
   esac
 done
 
-echo "→ Building claw-ios-sdk (profile: ${PROFILE})"
-echo "  Workspace: ${WORKSPACE}"
-echo "  Output:    ${BUILD_DIR}"
+echo "=== claw-ios-sdk xcframework build (${PROFILE}) ==="
+echo "  Workspace : ${WORKSPACE}"
+echo "  Output    : ${BUILD_DIR}"
+echo ""
 
-# ── 1. Compile for all iOS targets ─────────────────────────────────────────
+# ── 0. Prerequisite check ──────────────────────────────────────────────────────
+
+if [[ "$(uname)" != "Darwin" ]]; then
+  echo "✗ This script must run on macOS."
+  exit 1
+fi
+
+if ! command -v xcodebuild &>/dev/null; then
+  echo "✗ xcodebuild not found. Install Xcode from the App Store."
+  exit 1
+fi
+
+MISSING_TARGETS=()
+for t in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios; do
+  rustup target list --installed 2>/dev/null | grep -q "^${t}" || MISSING_TARGETS+=("$t")
+done
+if [[ ${#MISSING_TARGETS[@]} -gt 0 ]]; then
+  echo "✗ Missing Rust targets. Run:"
+  for t in "${MISSING_TARGETS[@]}"; do echo "    rustup target add ${t}"; done
+  exit 1
+fi
+
+echo "✓ Prerequisites OK"
+echo ""
+
+# ── 1. Compile for all iOS targets ────────────────────────────────────────────
 
 TARGETS=(
-  "aarch64-apple-ios"          # physical iPhone/iPad
-  "aarch64-apple-ios-sim"      # Simulator on Apple Silicon
-  "x86_64-apple-ios"           # Simulator on Intel Mac
+  "aarch64-apple-ios"        # physical iPhone/iPad
+  "aarch64-apple-ios-sim"    # Simulator on Apple Silicon Mac
+  "x86_64-apple-ios"         # Simulator on Intel Mac
 )
 
 for TARGET in "${TARGETS[@]}"; do
@@ -49,7 +78,9 @@ for TARGET in "${TARGETS[@]}"; do
   cargo build -p "${CRATE}" --target "${TARGET}" ${CARGO_PROFILE_FLAG}
 done
 
-# ── 2. Create fat library for simulator (arm64 + x86_64) ──────────────────
+echo ""
+
+# ── 2. Fat simulator library (arm64-sim + x86_64-sim) ─────────────────────────
 
 SIM_ARM="${WORKSPACE}/target/aarch64-apple-ios-sim/${PROFILE}/lib${LIB_NAME}.a"
 SIM_X86="${WORKSPACE}/target/x86_64-apple-ios/${PROFILE}/lib${LIB_NAME}.a"
@@ -57,70 +88,70 @@ SIM_FAT="${BUILD_DIR}/sim-fat/lib${LIB_NAME}.a"
 DEVICE_LIB="${WORKSPACE}/target/aarch64-apple-ios/${PROFILE}/lib${LIB_NAME}.a"
 
 mkdir -p "${BUILD_DIR}/sim-fat"
-echo "→ lipo: creating fat simulator library"
+echo "→ lipo: fat simulator library"
 lipo -create "${SIM_ARM}" "${SIM_X86}" -output "${SIM_FAT}"
 
-# ── 3. Generate Swift bindings ─────────────────────────────────────────────
+# ── 3. Generate Swift bindings ─────────────────────────────────────────────────
 
 SWIFT_OUT="${BUILD_DIR}/ClawIosSDK"
 mkdir -p "${SWIFT_OUT}"
 
-echo "→ Generating Swift bindings with uniffi-bindgen"
-# uniffi-bindgen-swift uses the library itself to extract the interface.
-# If you installed uniffi-bindgen instead, use:
-#   uniffi-bindgen generate --library "${DEVICE_LIB}" --language swift --out-dir "${SWIFT_OUT}"
-if command -v uniffi-bindgen-swift &>/dev/null; then
-  uniffi-bindgen-swift "${DEVICE_LIB}" --out-dir "${SWIFT_OUT}"
-else
-  cargo run --manifest-path "${WORKSPACE}/Cargo.toml" \
-    -p uniffi-bindgen -- generate \
-    --library "${DEVICE_LIB}" \
-    --language swift \
-    --out-dir "${SWIFT_OUT}" 2>/dev/null \
-  || (
-    echo "⚠  uniffi-bindgen not found. Install with:"
-    echo "     cargo install uniffi-bindgen"
-    echo "   Then re-run this script."
-    echo "   Swift bindings will NOT be included in the XCFramework headers."
-  )
+echo "→ Generating Swift bindings (uniffi-bindgen)"
+cargo run -p uniffi-bindgen -- generate \
+  --library "${DEVICE_LIB}" \
+  --language swift \
+  --out-dir "${SWIFT_OUT}"
+
+# Copy generated .swift file(s) into the ios-app source tree so Package.swift
+# picks them up automatically (ClawIosSDK target path = Sources/ClawIosSDK/).
+mkdir -p "${IOS_SDK_SWIFT_DIR}"
+if ls "${SWIFT_OUT}"/*.swift &>/dev/null; then
+  cp "${SWIFT_OUT}"/*.swift "${IOS_SDK_SWIFT_DIR}/"
+  echo "→ Swift bindings copied to ${IOS_SDK_SWIFT_DIR}/"
 fi
 
-# ── 4. Compile .modulemap + headers for XCFramework ───────────────────────
+echo ""
+
+# ── 4. Headers directory for XCFramework ──────────────────────────────────────
 
 HEADERS_DIR="${BUILD_DIR}/headers"
 mkdir -p "${HEADERS_DIR}"
 
-# Copy the generated .h and modulemap from uniffi output, if present.
+# Copy uniffi-generated C header(s)
 if ls "${SWIFT_OUT}"/*.h &>/dev/null; then
   cp "${SWIFT_OUT}"/*.h "${HEADERS_DIR}/"
 fi
 
-cat > "${HEADERS_DIR}/module.modulemap" <<'MODULEMAP'
-framework module ClawIosSDK {
-  umbrella header "claw_ios_sdk.h"
+# Use uniffi's generated modulemap; fall back to a hand-written one.
+if ls "${SWIFT_OUT}"/*.modulemap &>/dev/null; then
+  # Rename to the conventional module.modulemap expected by xcodebuild.
+  FIRST_MM="$(ls "${SWIFT_OUT}"/*.modulemap | head -1)"
+  cp "${FIRST_MM}" "${HEADERS_DIR}/module.modulemap"
+else
+  # Fallback: write a modulemap that matches the ffi_module_name in uniffi.toml.
+  cat > "${HEADERS_DIR}/module.modulemap" <<'MODULEMAP'
+module ClawIosSDKFFI {
+  header "ClawIosSDKFFI.h"
   export *
-  module * { export * }
 }
 MODULEMAP
+fi
 
-# ── 5. Build XCFramework ───────────────────────────────────────────────────
+# ── 5. Assemble XCFramework ────────────────────────────────────────────────────
 
 XCFW="${BUILD_DIR}/ClawIosSDK.xcframework"
 rm -rf "${XCFW}"
 
-echo "→ Creating ${XCFW}"
+echo "→ xcodebuild -create-xcframework → ${XCFW}"
 xcodebuild -create-xcframework \
-  -library "${DEVICE_LIB}"  -headers "${HEADERS_DIR}" \
-  -library "${SIM_FAT}"     -headers "${HEADERS_DIR}" \
-  -output "${XCFW}"
+  -library "${DEVICE_LIB}" -headers "${HEADERS_DIR}" \
+  -library "${SIM_FAT}"    -headers "${HEADERS_DIR}" \
+  -output  "${XCFW}"
 
 echo ""
-echo "✓ Done!"
+echo "✓ Build complete!"
 echo ""
 echo "  XCFramework : ${XCFW}"
-echo "  Swift files : ${SWIFT_OUT}/*.swift"
+echo "  Swift files : ${IOS_SDK_SWIFT_DIR}/"
 echo ""
-echo "Next steps in Xcode:"
-echo "  1. Drag ClawIosSDK.xcframework into your project (Frameworks, Libraries)"
-echo "  2. Add the generated .swift files in ${SWIFT_OUT}/ to your target"
-echo "  3. Set ANTHROPIC_API_KEY in your app or pass it to ClawIosConfig"
+echo "Next: run ios-app/setup_xcode.sh to generate the Xcode project."

@@ -8,14 +8,20 @@ let package = Package(
         .library(name: "ClawSDKWrapper", targets: ["ClawSDKWrapper"]),
     ],
     targets: [
-        // The generated Rust static library (built via build-ios.sh).
-        // Point this to the XCFramework once built on a Mac.
+        // C/FFI static library built by build-ios.sh.
+        // The xcframework's internal module is named ClawIosSDKFFI (see uniffi.toml).
         .binaryTarget(
-            name: "ClawIosSDK",
+            name: "ClawIosSDKFFI",
             path: "../rust/build/ClawIosSDK.xcframework"
         ),
-        // Swift wrapper that re-exports the UniFFI bindings with a
-        // cleaner async/await API.
+        // Generated Swift bindings (produced by uniffi-bindgen, copied by build-ios.sh).
+        // This exposes the ClawIosSDK module that ClawSession.swift imports.
+        .target(
+            name: "ClawIosSDK",
+            dependencies: ["ClawIosSDKFFI"],
+            path: "Sources/ClawIosSDK"
+        ),
+        // High-level async/await wrapper used by the SwiftUI app.
         .target(
             name: "ClawSDKWrapper",
             dependencies: ["ClawIosSDK"],
