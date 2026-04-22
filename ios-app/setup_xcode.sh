@@ -43,17 +43,27 @@ fi
 
 echo "✓ Xcode: $(xcodebuild -version | head -1)"
 
-# ── 2. Rust targets ───────────────────────────────────────────────────────────
+# ── 2. Rust + rustup ─────────────────────────────────────────────────────────
+
+if ! command -v rustup &>/dev/null; then
+  echo "✗ Rust not found. Install it with:"
+  echo "    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+  echo "  Then run:  source ~/.cargo/env"
+  echo "  Then re-run this script."
+  exit 1
+fi
+
+echo "✓ Rust: $(rustc --version)"
 
 TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios)
-INSTALLED="$(rustup target list --installed 2>/dev/null)"
+INSTALLED="$(rustup target list --installed 2>/dev/null)" || INSTALLED=""
 NEED_ADD=()
 for t in "${TARGETS[@]}"; do
   echo "${INSTALLED}" | grep -q "^${t}" || NEED_ADD+=("$t")
 done
 
 if [[ ${#NEED_ADD[@]} -gt 0 ]]; then
-  echo "→ Adding missing Rust targets: ${NEED_ADD[*]}"
+  echo "→ Adding missing Rust iOS targets: ${NEED_ADD[*]}"
   rustup target add "${NEED_ADD[@]}"
 fi
 
