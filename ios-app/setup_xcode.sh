@@ -1,16 +1,10 @@
 #!/usr/bin/env bash
-# setup_xcode.sh — One-shot: build XCFramework + generate Xcode project.
+# setup_xcode.sh — Build XCFramework + open Xcode project.
 #
-# Run this from the ios-app/ directory (or anywhere — it auto-locates the repo):
-#   cd ios-app/
-#   bash setup_xcode.sh           # debug build
-#   bash setup_xcode.sh --release # release/App Store build
-#
-# What it does:
-#   1. Checks prerequisites (Xcode, rustup targets, xcodegen)
-#   2. Builds ClawIosSDK.xcframework via rust/scripts/build-ios.sh
-#   3. Runs xcodegen to create/refresh ClawApp.xcodeproj
-#   4. Opens ClawApp.xcodeproj in Xcode
+# Usage:
+#   cd claw-code/
+#   bash ios-app/setup_xcode.sh           # debug build
+#   bash ios-app/setup_xcode.sh --release # release build
 
 set -euo pipefail
 
@@ -36,20 +30,19 @@ if [[ "$(uname)" != "Darwin" ]]; then
 fi
 
 if ! command -v xcodebuild &>/dev/null; then
-  echo "✗ Xcode not found. Install it from the App Store, then run:"
-  echo "    sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer"
+  echo "✗ Xcode not found."
+  echo "  sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer"
   exit 1
 fi
 
 echo "✓ Xcode: $(xcodebuild -version | head -1)"
 
-# ── 2. Rust + rustup ─────────────────────────────────────────────────────────
+# ── 2. Rust + iOS targets ─────────────────────────────────────────────────────
 
 if ! command -v rustup &>/dev/null; then
-  echo "✗ Rust not found. Install it with:"
+  echo "✗ Rust not found. Install with:"
   echo "    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-  echo "  Then run:  source ~/.cargo/env"
-  echo "  Then re-run this script."
+  echo "  Then: source ~/.cargo/env  and re-run."
   exit 1
 fi
 
@@ -61,58 +54,44 @@ NEED_ADD=()
 for t in "${TARGETS[@]}"; do
   echo "${INSTALLED}" | grep -q "^${t}" || NEED_ADD+=("$t")
 done
-
 if [[ ${#NEED_ADD[@]} -gt 0 ]]; then
-  echo "→ Adding missing Rust iOS targets: ${NEED_ADD[*]}"
+  echo "→ Adding Rust iOS targets: ${NEED_ADD[*]}"
   rustup target add "${NEED_ADD[@]}"
 fi
-
 echo "✓ Rust iOS targets installed"
 
-# ── 3. xcodegen ───────────────────────────────────────────────────────────────
-
-if ! command -v xcodegen &>/dev/null; then
-  echo "→ xcodegen not found — installing via Homebrew..."
-  if ! command -v brew &>/dev/null; then
-    echo "✗ Homebrew not found. Install it from https://brew.sh then re-run."
-    exit 1
-  fi
-  brew install xcodegen
-fi
-
-echo "✓ xcodegen: $(xcodegen --version 2>/dev/null | head -1)"
-
-# ── 4. Build XCFramework ──────────────────────────────────────────────────────
+# ── 3. Build XCFramework ──────────────────────────────────────────────────────
 
 echo ""
-echo "─── Building XCFramework ────────────────────────────────────────────────"
+echo "─── Building ClawIosSDK.xcframework ─────────────────────────────────────"
 cd "${RUST_DIR}"
 bash scripts/build-ios.sh ${PROFILE_FLAG}
 
-# ── 5. Generate Xcode project ─────────────────────────────────────────────────
+# ── 4. Open Xcode project ─────────────────────────────────────────────────────
 
 echo ""
-echo "─── Generating ClawApp.xcodeproj ────────────────────────────────────────"
-cd "${IOS_APP_DIR}"
-xcodegen generate --spec project.yml
-
+echo "✓ XCFramework built!"
 echo ""
-echo "✓ ClawApp.xcodeproj ready!"
 
-# ── 6. Open in Xcode ─────────────────────────────────────────────────────────
-
-echo "→ Opening Xcode..."
-open "${IOS_APP_DIR}/ClawApp.xcodeproj"
+XCPROJ="${IOS_APP_DIR}/ClawApp.xcodeproj"
+if [[ -d "${XCPROJ}" ]]; then
+  echo "→ Opening ${XCPROJ} in Xcode..."
+  open "${XCPROJ}"
+else
+  echo "→ Opening Xcode (create project manually — see instructions below)..."
+  open /Applications/Xcode.app
+fi
 
 echo ""
 echo "=== Done! ==="
 echo ""
-echo "In Xcode:"
-echo "  1. Select your iPhone as the run destination"
-echo "  2. Set your Team under Signing & Capabilities"
-echo "  3. Hit ▶ Run"
+echo "If Xcode opens without a project, create it once:"
+echo "  1. File → New → Project → iOS → App → Next"
+echo "  2. Product Name: ClawApp  |  Interface: SwiftUI  |  Language: Swift"
+echo "  3. Save inside:  ${IOS_APP_DIR}/"
+echo "  4. File → Add Package Dependencies → Add Local → select ${IOS_APP_DIR}/"
+echo "     then add product: ClawSDKWrapper"
+echo "  5. Delete the auto-generated ContentView.swift and ClawApp.swift"
+echo "  6. Add existing files from ${IOS_APP_DIR}/Sources/ClawApp/"
 echo ""
-echo "API keys — edit ContentView.swift or set env vars before building:"
-echo "  ANTHROPIC_API_KEY   — required"
-echo "  TAVILY_API_KEY      — for web search (optional)"
-echo "  FIRECRAWL_API_KEY   — for JS-rendered pages (optional)"
+echo "Then: select your iPhone → set Team → ▶ Run"
