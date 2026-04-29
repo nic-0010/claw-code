@@ -11,25 +11,27 @@
     <link rel="manifest" href="manifest.json">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root { --primary: #007AFF; --bg: #000000; --surface: #1C1C1E; --surface2: #2C2C2E; --text: #FFFFFF; --text2: #8E8E93; }
+        :root { --primary: #007AFF; --bg: #000000; --surface: #1C1C1E; --surface2: #2C2C2E; --text: #FFFFFF; --text2: #8E8E93; --success: #30D158; }
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
         .app-container { display: flex; flex-direction: column; height: 100vh; }
-        .header { padding: 60px 20px 20px; background: var(--bg); border-bottom: 1px solid var(--surface2); }
+        .header { padding: 60px 20px 20px; background: var(--bg); border-bottom: 1px solid var(--surface2); display: flex; justify-content: space-between; align-items: center; }
         .header h1 { font-size: 34px; font-weight: 700; }
-        .header p { color: var(--text2); font-size: 15px; margin-top: 4px; }
+        .header-btn { background: var(--surface); border: none; border-radius: 12px; padding: 10px 16px; color: var(--text); font-size: 14px; cursor: pointer; }
         .chat-container { flex: 1; overflow-y: auto; padding: 20px; }
         .message { margin-bottom: 20px; animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .message.user { text-align: right; }
-        .message-bubble { display: inline-block; padding: 12px 16px; border-radius: 18px; max-width: 80%; font-size: 16px; line-height: 1.4; }
+        .message-bubble { display: inline-block; padding: 12px 16px; border-radius: 18px; max-width: 85%; font-size: 16px; line-height: 1.4; text-align: left; word-wrap: break-word; }
         .message.user .message-bubble { background: var(--primary); color: white; border-bottom-right-radius: 4px; }
         .message.assistant .message-bubble { background: var(--surface); border-bottom-left-radius: 4px; }
+        .message.assistant .message-bubble.error { border: 1px solid var(--danger); }
         .input-container { padding: 12px 20px 40px; background: var(--bg); border-top: 1px solid var(--surface2); }
         .input-wrapper { display: flex; align-items: center; background: var(--surface); border-radius: 22px; padding: 4px; }
         .input-wrapper input { flex: 1; background: transparent; border: none; color: var(--text); font-size: 16px; padding: 12px 16px; outline: none; }
         .input-wrapper input::placeholder { color: var(--text2); }
         .send-btn { background: var(--primary); border: none; border-radius: 20px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         .send-btn svg { width: 20px; height: 20px; fill: white; }
+        .send-btn:disabled { opacity: 0.5; }
         .tools-section { padding: 0 20px 20px; }
         .tools-title { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; margin-bottom: 12px; }
         .tools-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
@@ -42,11 +44,23 @@
         .loading span:nth-child(1) { animation-delay: -0.32s; }
         .loading span:nth-child(2) { animation-delay: -0.16s; }
         @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 100; padding: 20px; }
+        .modal.show { display: block; }
+        .modal-content { background: var(--surface); border-radius: 16px; padding: 20px; margin-top: 100px; }
+        .modal-content h2 { margin-bottom: 16px; }
+        .modal-content label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 6px; }
+        .modal-content input, .modal-content select { width: 100%; background: var(--surface2); border: none; border-radius: 10px; padding: 12px; color: var(--text); font-size: 15px; margin-bottom: 16px; outline: none; }
+        .modal-content button { width: 100%; background: var(--primary); border: none; border-radius: 10px; padding: 14px; color: white; font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 10px; }
+        .modal-content .secondary { background: var(--surface2); }
+        .saved ✓ salvato
     </style>
 </head>
 <body>
     <div class="app-container">
-        <div class="header"><h1>Claw</h1><p>AI Assistant</p></div>
+        <div class="header">
+            <h1>Claw</h1>
+            <button class="header-btn" onclick="showSettings()">⚙️ Impostazioni</button>
+        </div>
         <div class="chat-container" id="chat">
             <div class="message assistant"><div class="message-bubble">Ciao! Sono Claw, il tuo assistente AI. Come posso aiutarti?</div></div>
         </div>
@@ -66,21 +80,123 @@
         <div class="input-container">
             <div class="input-wrapper">
                 <input type="text" id="messageInput" placeholder="Scrivi un messaggio..." onkeypress="handleKeyPress(event)">
-                <button class="send-btn" onclick="sendMessage()"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
             </div>
         </div>
     </div>
+    
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <h2>⚙️ Impostazioni API</h2>
+            <label>Provider</label>
+            <select id="providerSelect" onchange="toggleApiKey()">
+                <option value="groq">🔥 Groq (gratis, veloce)</option>
+                <option value="openai">OpenAI (🔑 richiede chiave)</option>
+                <option value="anthropic">Anthropic (🔑 richiede chiave)</option>
+            </select>
+            <label>API Key <span id="apiKeyStatus"></span></label>
+            <input type="password" id="apiKeyInput" placeholder="Inserisci la tua API key">
+            <button onclick="saveSettings()">💾 Salva</button>
+            <button class="secondary" onclick="closeSettings()">✕ Chiudi</button>
+            <p style="font-size:12px;color:var(--text2);margin-top:12px;">
+                • Groq: gratis, nessuna key necessaria<br>
+                • OpenAI: go to platform.openai.com/api-keys<br>
+                • Anthropic: go to console.anthropic.com/keys
+            </p>
+        </div>
+    </div>
+
     <script>
-        const responses = {
-            'stock': "📈 **Stock Screener - Goldman Sachs**\n\nPer analisi completa:\n• Ticker azione\n• Settore preferito\n• Criteri di screening\n\n*Invia i dettagli per iniziare.*",
-            'dcf': "💰 **DCF Valuation - Morgan Stanley**\n\nPer valutazione DCF:\n• Ticker azienda\n• Proiezioni finanziarie\n\n*Invia il nome dell'azienda.*",
-            'risk': "⚠️ **Risk Analysis - Bridgewater**\n\nPer analisi rischio portafoglio:\n• Posizioni attuali\n• Capitale totale\n\n*Invia i dettagli.*",
-            'technical': "📊 **Technical Analysis - Citadel**\n\nPer analisi tecnica:\n• Ticker\n• Timeframe\n\n*Invia i dettagli.*",
-            'portfolio': "💼 **Portfolio - BlackRock**\n\nPer costruire portafoglio:\n• Capitale disponibile\n• Obiettivi\n• Rischio\n\n*Invia i tuoi dati.*",
-            'earnings': "📋 **Earnings - JPMorgan**\n\nPer analisi pre-earnings:\n• Ticker azienda\n• Data earnings\n\n*Invia i dettagli.*",
-            'dividend': "💵 **Dividend Portfolio - Harvard**\n\nPer portafoglio dividendi:\n• Capitale\n• Anni orizzonte\n\n*Invia i dettagli.*",
-            'macro': "🌍 **Macro Analysis - McKinsey**\n\nPer analisi macro:\n• Portafoglio attuale\n• Focus geografico\n\n*Invia i dettagli.*"
+        const API_BASE = {
+            groq: 'https://api.groq.com/openai/v1',
+            openai: 'https://api.openai.com/v1',
+            anthropic: 'https://api.anthropic.com/v1'
         };
+        
+        const MODELS = {
+            groq: 'llama-3.3-70b-versatile',
+            openai: 'gpt-4o-mini',
+            anthropic: 'claude-3-haiku-20240307'
+        };
+        
+        let config = JSON.parse(localStorage.getItem('claw_config') || '{}');
+        let conversation = [];
+        
+        function toggleApiKey() {
+            const provider = document.getElementById('providerSelect').value;
+            document.getElementById('apiKeyInput').placeholder = provider === 'groq' ? 'Non necessaria' : 'Inserisci API key...';
+        }
+        
+        function showSettings() {
+            document.getElementById('settingsModal').classList.add('show');
+            if (config.provider) document.getElementById('providerSelect').value = config.provider;
+            if (config.apiKey) document.getElementById('apiKeyInput').value = config.apiKey;
+            toggleApiKey();
+        }
+        
+        function closeSettings() {
+            document.getElementById('settingsModal').classList.remove('show');
+        }
+        
+        function saveSettings() {
+            config.provider = document.getElementById('providerSelect').value;
+            config.apiKey = document.getElementById('apiKeyInput').value;
+            localStorage.setItem('claw_config', JSON.stringify(config));
+            closeSettings();
+        }
+        
+        function getHeaders() {
+            const provider = config.provider || 'groq';
+            const headers = { 'Content-Type': 'application/json' };
+            if (provider === 'openai') {
+                headers['Authorization'] = `Bearer ${config.apiKey}`;
+            } else if (provider === 'anthropic') {
+                headers['x-api-key'] = config.apiKey;
+                headers['anthropic-version'] = '2023-05-31';
+            } else if (provider === 'groq' && config.apiKey) {
+                headers['Authorization'] = `Bearer ${config.apiKey}`;
+            }
+            return headers;
+        }
+        
+        async function callAI(message) {
+            const provider = config.provider || 'groq';
+            const model = MODELS[provider];
+            let body, endpoint;
+            
+            conversation.push({ role: 'user', content: message });
+            
+            if (provider === 'anthropic') {
+                endpoint = `${API_BASE[provider]}/messages`;
+                body = { model, max_tokens: 1024, messages: conversation.slice(-10) };
+            } else {
+                endpoint = `${API_BASE[provider]}/chat/completions`;
+                body = { model, messages: conversation.slice(-10), temperature: 0.7 };
+            }
+            
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify(body)
+            });
+            
+            if (!response.ok) {
+                const err = await response.text();
+                throw new Error(err);
+            }
+            
+            const data = await response.json();
+            let reply;
+            
+            if (provider === 'anthropic') {
+                reply = data.content[0].text;
+            } else {
+                reply = data.choices[0].message.content;
+            }
+            
+            conversation.push({ role: 'assistant', content: reply });
+            return reply;
+        }
         
         function addMessage(content, isUser = false) {
             const chat = document.getElementById('chat');
@@ -88,30 +204,52 @@
             chat.scrollTop = chat.scrollHeight;
         }
         
-        function sendMessage() {
+        async function sendMessage() {
             const input = document.getElementById('messageInput');
             const content = input.value.trim();
             if (!content) return;
-            addMessage(content, true);
+            
             input.value = '';
-            setTimeout(() => {
-                const lower = content.toLowerCase();
-                let response = "Capisco! Per analisi finanziarie usa i pulsanti sopra. 📊\n\nOppure descrivi cosa ti serve!";
-                if (lower.includes('azione') || lower.includes('stock')) response = responses['stock'];
-                else if (lower.includes('valut') || lower.includes('dcf')) response = responses['dcf'];
-                else if (lower.includes('rischio') || lower.includes('risk')) response = responses['risk'];
-                else if (lower.includes('tecnica')) response = responses['technical'];
-                else if (lower.includes('portafoglio') || lower.includes('portfolio')) response = responses['portfolio'];
-                else if (lower.includes('earning') || lower.includes('utili')) response = responses['earnings'];
-                else if (lower.includes('dividendo')) response = responses['dividend'];
-                else if (lower.includes('macro')) response = responses['macro'];
-                addMessage(response);
-            }, 800);
+            document.getElementById('sendBtn').disabled = true;
+            addMessage(content, true);
+            
+            showTyping();
+            
+            try {
+                const reply = await callAI(content);
+                hideTyping();
+                addMessage(reply);
+            } catch (e) {
+                hideTyping();
+                addMessage('❌ Errore: ' + e.message, false);
+            }
+            
+            document.getElementById('sendBtn').disabled = false;
+        }
+        
+        function showTyping() {
+            const chat = document.getElementById('chat');
+            chat.innerHTML += '<div class="message assistant" id="typing"><div class="loading"><span></span><span></span><span></span></div></div>';
+            chat.scrollTop = chat.scrollHeight;
+        }
+        
+        function hideTyping() {
+            const t = document.getElementById('typing');
+            if (t) t.remove();
         }
         
         function useTool(tool) {
-            addMessage(`Tool: ${tool.toUpperCase()}`, true);
-            setTimeout(() => addMessage(responses[tool]), 500);
+            const prompts = {
+                stock: 'Analizza azioni con criteria Goldman Sachs: P/E, growth, dividend yield. Cerca opportunità di valore.',
+                dcf: 'Valuta azienda con DCF (Discounted Cash Flow): flussi futuri, WACC, terminal value.',
+                risk: 'Analisi rischio portafoglio: VaR, drawdown massimo, correlazioni, hedging.',
+                technical: 'Analisi tecnica: supporti/resistenze, trendline, RSI, MACD, pattern grafici.',
+                portfolio: 'Costruisci portafoglio ottimizzato: asset allocation, diversificazione, rebalancing.',
+                earnings: 'Analisi pre-earnings: stime consensus, guidance, revisioni, sorpresa可能的.',
+                dividend: 'Portafoglio dividendi: yield, payout ratio, crescita dividendi, reinvestimento.',
+                macro: 'Analisi macro: tassi, inflazione, PIL, geopolitica, settori.'
+            };
+            sendMessage(prompts[tool]);
         }
         
         function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
