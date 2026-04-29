@@ -1,0 +1,17 @@
+{
+    "name": "Claw - AI Assistant",
+    "short_name": "Claw",
+    "description": "AI Assistant with Financial Tools",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#000000",
+    "theme_color": "#007AFF",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        }
+    ]
+}
