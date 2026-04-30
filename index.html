@@ -24,7 +24,6 @@
         .message-bubble { display: inline-block; padding: 12px 16px; border-radius: 18px; max-width: 80%; font-size: 16px; line-height: 1.4; white-space: pre-wrap; }
         .message.user .message-bubble { background: var(--primary); color: white; border-bottom-right-radius: 4px; }
         .message.assistant .message-bubble { background: var(--surface); border-bottom-left-radius: 4px; }
-        .message.error .message-bubble { background: var(--error); }
         .input-container { padding: 12px 20px 40px; background: var(--bg); border-top: 1px solid var(--surface2); }
         .input-wrapper { display: flex; align-items: center; background: var(--surface); border-radius: 22px; padding: 4px; }
         .input-wrapper input { flex: 1; background: transparent; border: none; color: var(--text); font-size: 16px; padding: 12px 16px; outline: none; }
@@ -34,8 +33,7 @@
         .tools-section { padding: 0 20px 20px; flex-shrink: 0; }
         .tools-title { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; margin-bottom: 12px; }
         .tools-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .tool-item { background: var(--surface); padding: 14px; border-radius: 12px; cursor: pointer; transition: all 0.2s ease; }
-        .tool-item:active { transform: scale(0.98); background: var(--surface2); }
+        .tool-item { background: var(--surface); padding: 14px; border-radius: 12px; cursor: pointer; }
         .tool-item h4 { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
         .tool-item p { font-size: 12px; color: var(--text2); }
         .loading { display: flex; gap: 4px; padding: 12px 16px; }
@@ -54,23 +52,23 @@
 </head>
 <body>
     <div class="app-container">
-        <div class="header"><h1>Claw</h1><p>AI Assistant</p></div>
+        <div class="header"><h1>Claw</h1><p>AI Assistant (testo)</p></div>
         <div class="chat-container" id="chat">
         </div>
         <div class="tools-section">
             <div class="tools-title">Strumenti Finanziari</div>
             <div class="tools-grid">
-                <div class="tool-item" onclick="useTool('stock')"><h4>📈 Stock Screener</h4><p>Goldman Sachs style</p></div>
-                <div class="tool-item" onclick="useTool('dcf')"><h4>💰 DCF Valuation</h4><p>Morgan Stanley style</p></div>
-                <div class="tool-item" onclick="useTool('risk')"><h4>⚠️ Risk Analysis</h4><p>Bridgewater style</p></div>
-                <div class="tool-item" onclick="useTool('technical')"><h4>📊 Technical</h4><p>Citadel style</p></div>
-                <div class="tool-item" onclick="useTool('portfolio')"><h4>💼 Portfolio</h4><p>BlackRock style</p></div>
-                <div class="tool-item" onclick="useTool('earnings')"><h4>📋 Earnings</h4><p>JPMorgan style</p></div>
+                <div class="tool-item" onclick="useTool('stock')"><h4>📈 Stock</h4><p>Goldman</p></div>
+                <div class="tool-item" onclick="useTool('dcf')"><h4>💰 DCF</h4><p>Morgan</p></div>
+                <div class="tool-item" onclick="useTool('risk')"><h4>⚠️ Rischio</h4><p>Bridgewater</p></div>
+                <div class="tool-item" onclick="useTool('technical')"><h4>📊 Tech</h4><p>Citadel</p></div>
+                <div class="tool-item" onclick="useTool('portfolio')"><h4>💼 Portafoglio</h4><p>BlackRock</p></div>
+                <div class="tool-item" onclick="useTool('earnings')"><h4>📋 Earnings</h4><p>JPMorgan</p></div>
             </div>
         </div>
         <div class="api-key-section">
             <div class="api-key-input">
-                <label>API Key</label>
+                <label>API Key (testo)</label>
                 <input type="password" id="apiKey" placeholder="sk-ant-api... o gsk_...">
                 <button onclick="testApiKey()" id="apiKeyBtn">Test connessione</button>
                 <div class="status" id="status"></div>
@@ -78,7 +76,7 @@
         </div>
         <div class="input-container">
             <div class="input-wrapper">
-                <input type="text" id="messageInput" placeholder="Scrivi un messaggio..." onkeypress="handleKeyPress(event)">
+                <input type="text" id="messageInput" placeholder="Scrivi in testo..." onkeypress="handleKeyPress(event)">
                 <button class="send-btn" onclick="sendMessage()"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
             </div>
         </div>
@@ -92,12 +90,12 @@
         let conversation = [];
         
         const responses = {
-            'stock': "📈 **Stock Screener**\nPer analisi:\n• Ticker azione\n• Settore\n✉️ Invia i dettagli",
-            'dcf': "💰 **DCF Valuation**\nPer valutazione:\n• Ticker\n• Proiezioni\n✉️ Invia il nome",
-            'risk': "⚠️ **Risk Analysis**\nPer analisi:\n• Posizioni\n• Capitale\n✉️ Invia i dettagli",
-            'technical': "📊 **Technical**\nPer analisi:\n• Ticker\n• Timeframe\n✉️ Invia i dettagli",
-            'portfolio': "💼 **Portfolio**\nPer costruire:\n• Capitale\n• Obiettivi\n✉️ Invia i dati",
-            'earnings': "📋 **Earnings**\nPer analisi:\n• Ticker\n• Data\n✉️ Invia i dettagli"
+            'stock': '📈 Stock Screener\nTicker, settore, criteri',
+            'dcf': '💰 DCF\nTicker, proiezioni',
+            'risk': '⚠️ Rischio\nPosizioni, capitale',
+            'technical': '📊 Technical\nTicker, timeframe',
+            'portfolio': '💼 Portafoglio\nCapitale, obiettivi',
+            'earnings': '📋 Earnings\nTicker, data'
         };
         
         function log(msg) {
@@ -106,13 +104,13 @@
         
         function addMessage(content, isUser = false) {
             const chat = document.getElementById('chat');
-            chat.innerHTML += `<div class="message ${isUser ? 'user' : 'assistant'}"><div class="message-bubble">${content}</div></div>`;
+            chat.innerHTML += '<div class="message ' + (isUser ? 'user' : 'assistant') + '"><div class="message-bubble">' + content + '</div></div>';
             chat.scrollTop = chat.scrollHeight;
         }
         
         function showTyping() {
             const chat = document.getElementById('chat');
-            chat.innerHTML += `<div class="message assistant" id="typing"><div class="loading"><span></span><span></span><span></span></div></div>`;
+            chat.innerHTML += '<div class="message assistant" id="typing"><div class="loading"><span></span><span></span><span></span></div></div>';
             chat.scrollTop = chat.scrollHeight;
         }
         
@@ -123,45 +121,39 @@
         
         async function testApiKey() {
             const inputKey = document.getElementById('apiKey').value.trim();
-            if (!inputKey) {
-                apiKey = localStorage.getItem('claw_api_key') || '';
-                if (apiKey) {
-                    document.getElementById('apiKey').value = apiKey.substring(0, 15) + '...';
-                }
-            } else {
+            if (inputKey) {
                 apiKey = inputKey;
                 localStorage.setItem('claw_api_key', apiKey);
+            } else {
+                apiKey = localStorage.getItem('claw_api_key') || '';
             }
             
             if (!apiKey) {
-                log('⚠️ Inserisci API Key');
+                log('Inserisci API Key');
                 return;
             }
             
-            log('⏳ Test connessione...');
-            testResult = false;
+            log('Test...');
             
             try {
                 let response;
-                const testMsg = 'Ciao, rispondi solo OK';
-                
                 if (apiKey.startsWith('sk-ant-')) {
-                    response = await callAnthropic(testMsg);
+                    response = await callAnthropic('OK');
                 } else if (apiKey.startsWith('gsk_')) {
-                    response = await callGroq(testMsg);
+                    response = await callGroq('OK');
                 } else {
-                    response = await callAnthropic(testMsg);
+                    response = await callAnthropic('OK');
                 }
                 
                 testResult = true;
-                conversation = [{role: 'user', content: 'Sei Claw, assistente finanziario. Rispondi in italiano, chiaro.'}];
+                conversation = [{role: 'user', content: 'Sei Claw. Rispondi in italiano.'}];
                 document.getElementById('apiKeyBtn').textContent = '✓ Connesso!';
                 document.getElementById('apiKeyBtn').classList.add('saved');
-                log('✅ API funziona! Scrivi un messaggio.');
-                addMessage("Ciao! 👋 L'AI è attiva. Come posso aiutarti?", false);
+                log('OK! Scrivi.');
+                addMessage('Ciao! 👋 AI attiva.', false);
             } catch (e) {
                 testResult = false;
-                log('❌ Errore: ' + e.message);
+                log('Errore: ' + e.message);
             }
         }
         
@@ -182,7 +174,7 @@
             
             if (!res.ok) {
                 const err = await res.json();
-                throw new Error(err.error?.message || `HTTP ${res.status}`);
+                throw new Error(err.error?.message || 'HTTP ' + res.status);
             }
             
             const data = await res.json();
@@ -194,7 +186,7 @@
             const res = await fetch(GROQ_API, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${apiKey}`,
+                    'Authorization': 'Bearer ' + apiKey,
                     'content-type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -206,7 +198,7 @@
             
             if (!res.ok) {
                 const err = await res.json();
-                throw new Error(err.error?.message || `HTTP ${res.status}`);
+                throw new Error(err.error?.message || 'HTTP ' + res.status);
             }
             
             const data = await res.json();
@@ -220,7 +212,7 @@
             if (!content) return;
             
             if (!testResult) {
-                addMessage("⚠️ Prima testa l'API Key! Clicca il pulsante 'Test connessione'", false);
+                addMessage('Testa prima API con pulsante', false);
                 return;
             }
             
@@ -234,26 +226,22 @@
                 
                 if (apiKey.startsWith('sk-ant-')) {
                     response = await callAnthropic(content);
-                } else if (apiKey.startsWith('gsk_')) {
-                    response = await callGroq(content);
                 } else {
-                    response = await callAnthropic(content);
+                    response = await callGroq(content);
                 }
                 
                 hideTyping();
                 addMessage(response, false);
                 conversation.push({role: 'assistant', content: response});
-                log('✅ Fatto');
             } catch (e) {
                 hideTyping();
-                addMessage("❌ Errore: " + e.message, false);
-                log('❌ ' + e.message);
+                addMessage('Errore: ' + e.message, false);
             }
         }
         
         function useTool(tool) {
             addMessage('→ ' + tool.toUpperCase(), true);
-            setTimeout(() => addMessage(responses[tool]), 300);
+            setTimeout(function() { addMessage(responses[tool]); }, 300);
         }
         
         function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
@@ -264,7 +252,7 @@
             apiKey = savedKey;
         }
         
-        addMessage('Ciao! 👋\n\n1. Inserisci API Key\n2. Clicca "Test connessione"\n3. Scrivi!', false);
+        addMessage('Ciao! Scrivi solo testo, no immagini.\n\n1. Inserisci API Key\n2. Test connessione\n3. Scrivi', false);
     </script>
 </body>
 </html>
