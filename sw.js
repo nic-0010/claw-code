@@ -1,4 +1,4 @@
-const CACHE_NAME = 'claw-v1';
+const CACHE_NAME = 'claw-v2';
 const urls = ['/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
