@@ -1,0 +1,2 @@
+# This directory is populated by rust/scripts/build-ios.sh.
+# Run that script first, then open ClawApp.xcodeproj in Xcode.
