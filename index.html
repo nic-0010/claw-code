@@ -2,13 +2,13 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#007AFF">
     <title>Claw</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root { --p: #007AFF; --bg: #000; --s: #1C1C1E; --s2: #2C2C2E; --t: #FFF; --t2: #8E8E93; }
+        :root { --p: #007AFF; --bg: #000; --s: #1C1C1E; --s2: #2C2C2E; --t: #FFF; --t2: #8E8E93; --ok: #30D158; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--t); height: 100vh; overflow: hidden; }
         
         .sidebar { position: fixed; top: 0; right: -280px; width: 280px; height: 100%; background: var(--s); transition: right .3s; z-index: 100; padding: 80px 20px; overflow-y: auto; }
@@ -50,7 +50,7 @@
         .api-box label { display: block; font-size: 13px; color: var(--t2); margin-bottom: 8px; }
         .api-box input { width: 100%; background: var(--s2); border: none; color: var(--t); font-size: 14px; padding: 10px 12px; border-radius: 8px; margin-bottom: 8px; }
         .api-box button { background: var(--p); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-size: 14px; cursor: pointer; width: 100%; }
-        .api-box button.ok { background: #30D158; }
+        .api-box button.ok { background: var(--ok); }
         .status { font-size: 12px; margin-top: 8px; color: var(--t2); }
     </style>
 </head>
@@ -80,16 +80,16 @@
         
         <div class="api-sec">
             <div class="api-box">
-                <label>API Key</label>
-                <input type="password" id="apiKey" placeholder="sk-ant...">
-                <button onclick="testApi()" id="apiBtn">Test</button>
+                <label>API Key (SOLO TESTO)</label>
+                <input type="password" id="apiKey" placeholder="sk-ant-... o gsk_...">
+                <button onclick="testApi()" id="apiBtn">Test connessione</button>
                 <div class="status" id="status"></div>
             </div>
         </div>
         
         <div class="input-area">
             <div class="input-wrap">
-                <input type="text" id="msgInput" placeholder="Scrivi..." onkeypress="if(e.key==='Enter')send()">
+                <input type="text" id="msgInput" placeholder="Scrivi solo testo...">
                 <button class="send-btn" onclick="send()">
                     <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                 </button>
@@ -98,124 +98,196 @@
     </div>
     
     <script>
+        "use strict";
+        
         const API_ANTHROPIC = 'https://api.anthropic.com/v1/messages';
         const API_GROQ = 'https://api.groq.com/openai/v1/chat/completions';
         
-        let key = '';
-        let ok = false;
-        let conv = [];
+        var key = '';
+        var connected = false;
+        var history = [];
         
-        const reps = { stock:'S: Ticker, settore', dcf:'D: Ticker', risk:'R: Posizioni', tech:'T: Ticker', port:'P: Capitale', earn:'E: Ticker' };
+        var reps = {
+            stock: 'Stock: Ticker, settore',
+            dcf: 'DCF: Ticker, proiezioni',
+            risk: 'Rischio: Posizioni, capitale',
+            tech: 'Tech: Ticker, timeframe',
+            port: 'Portafoglio: Capitale, obiettivi',
+            earn: 'Earnings: Ticker, data'
+        };
         
         function toggle() {
             document.getElementById('sidebar').classList.toggle('open');
             document.querySelector('.overlay').classList.toggle('show');
         }
         
-        function log(m) { document.getElementById('status').textContent = m; }
+        function log(msg) {
+            document.getElementById('status').textContent = msg;
+        }
         
-        function add(m, u) {
-            const c = document.getElementById('chat');
-            c.innerHTML += '<div class="msg ' + (u?'user':'assistant') + '"><div class="bubble">' + m + '</div></div>';
+        function add(text, isUser) {
+            var c = document.getElementById('chat');
+            c.innerHTML += '<div class="msg ' + (isUser ? 'user' : 'assistant') + '"><div class="bubble">' + text + '</div></div>';
             c.scrollTop = c.scrollHeight;
         }
         
         function showLoad() {
-            const c = document.getElementById('chat');
+            var c = document.getElementById('chat');
             c.innerHTML += '<div class="msg assistant" id="load"><div class="dots"><span></span><span></span></div></div>';
             c.scrollTop = c.scrollHeight;
         }
         
-        function hideLoad() { var t=document.getElementById('load'); if(t)t.remove(); }
+        function hideLoad() {
+            var t = document.getElementById('load');
+            if (t) t.parentNode.removeChild(t);
+        }
+        
+        async function callApi(url, opts) {
+            var res = await fetch(url, opts);
+            if (!res.ok) {
+                var errData = await res.json();
+                throw new Error(errData.error ? errData.error.message : 'HTTP ' + res.status);
+            }
+            var data = await res.json();
+            if (data.error) throw new Error(data.error.message);
+            return data;
+        }
         
         async function testApi() {
-            const k = document.getElementById('apiKey').value.trim();
-            if(k) { key = k; localStorage.setItem('claw_key', k); }
-            else { key = localStorage.getItem('claw_key') || ''; }
+            var inputKey = document.getElementById('apiKey').value.trim();
             
-            if(!key) { log('Inserisci key'); return; }
+            if (inputKey) {
+                key = inputKey;
+            } else {
+                key = '';
+            }
             
-            log('Test...');
+            if (!key) {
+                log('Inserisci API Key per favore');
+                return;
+            }
+            
+            log('Test in corso...');
+            connected = false;
             
             try {
-                let r;
-                if(key.startsWith('sk-ant-')) r = await callAnthropic('OK');
-                else if(key.startsWith('gsk_')) r = await callGroq('OK');
-                else r = await callAnthropic('OK');
+                var reply;
+                if (key.indexOf('sk-ant-') === 0) {
+                    reply = await callApi(API_ANTHROPIC, {
+                        method: 'POST',
+                        headers: {
+                            'x-api-key': key,
+                            'anthropic-version': '2023-06-01',
+                            'content-type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            model: 'claude-3-haiku-20240307',
+                            max_tokens: 50,
+                            messages: [{role: 'user', content: 'OK'}]
+                        })
+                    });
+                    reply = reply.content[0].text;
+                } else if (key.indexOf('gsk_') === 0) {
+                    reply = await callApi(API_GROQ, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + key,
+                            'content-type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            model: 'llama-3-70b-8192',
+                            messages: [{role: 'user', content: 'OK'}],
+                            max_tokens: 50
+                        })
+                    });
+                    reply = reply.choices[0].message.content;
+                } else {
+                    throw new Error('Formato chiave non riconosciuto. Deve iniziare con sk-ant- o gsk_');
+                }
                 
-                ok = true;
-                conv = [{role:'user',content:'Rispondi it.'}];
-                document.getElementById('apiBtn').textContent = '✓ OK';
+                connected = true;
+                history = [{role: 'user', content: 'Rispondi solo in italiano.'}];
+                document.getElementById('apiBtn').textContent = '✓ Connesso';
                 document.getElementById('apiBtn').classList.add('ok');
-                log('OK!');
-                add('Ciao! 👋', false);
-            } catch(e) {
-                ok = false;
-                log('Err: '+e.message);
+                log('Connesso OK!');
+                add('Ciao! L\'AI funziona. Scrivi pure.', false);
+            } catch (e) {
+                connected = false;
+                log('Errore: ' + e.message);
+                add('Errore connessione: ' + e.message, false);
             }
         }
         
-        async function callAnthropic(msg) {
-            const res = await fetch(API_ANTHROPIC, {
-                method: 'POST',
-                headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-                body: JSON.stringify({ model: 'claude-3-haiku-20240307', max_tokens: 500, messages: [...conv,{role:'user',content:msg}] })
-            });
-            if(!res.ok) { const e=await res.json(); throw new Error(e.error?.message||'err'); }
-            const d = await res.json();
-            if(d.error) throw new Error(d.error.message);
-            return d.content[0].text;
-        }
-        
-        async function callGroq(msg) {
-            const res = await fetch(API_GROQ, {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer '+key, 'content-type': 'application/json' },
-                body: JSON.stringify({ model: 'llama-3-70b-8192', messages: [...conv,{role:'user',content:msg}], max_tokens: 500 })
-            });
-            if(!res.ok) { const e=await res.json(); throw new Error(e.error?.message||'err'); }
-            const d = await res.json();
-            if(d.error) throw new Error(d.error.message);
-            return d.choices[0].message.content;
-        }
-        
         async function send() {
-            const txt = document.getElementById('msgInput').value.trim();
-            if(!txt) return;
-            if(!ok) { add('Testa prima API', false); return; }
+            var input = document.getElementById('msgInput');
+            var text = input.value.trim();
             
-            add(txt, true);
-            document.getElementById('msgInput').value = '';
+            if (!text) return;
+            
+            if (!connected) {
+                add('Prima connetti l\'API!', false);
+                return;
+            }
+            
+            add(text, true);
+            input.value = '';
             showLoad();
             
             try {
-                conv.push({role:'user',content:txt});
-                let r;
-                if(key.startsWith('sk-ant-')) r = await callAnthropic(txt);
-                else r = await callGroq(txt);
+                history.push({role: 'user', content: text});
+                
+                var reply;
+                if (key.indexOf('sk-ant-') === 0) {
+                    var r = await callApi(API_ANTHROPIC, {
+                        method: 'POST',
+                        headers: {
+                            'x-api-key': key,
+                            'anthropic-version': '2023-06-01',
+                            'content-type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            model: 'claude-3-haiku-20240307',
+                            max_tokens: 500,
+                            messages: history
+                        })
+                    });
+                    reply = r.content[0].text;
+                } else {
+                    var r2 = await callApi(API_GROQ, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + key,
+                            'content-type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            model: 'llama-3-70b-8192',
+                            messages: history,
+                            max_tokens: 500
+                        })
+                    });
+                    reply = r2.choices[0].message.content;
+                }
                 
                 hideLoad();
-                add(r, false);
-                conv.push({role:'assistant',content:r});
-            } catch(e) {
+                add(reply, false);
+                history.push({role: 'assistant', content: reply});
+            } catch (e) {
                 hideLoad();
-                add('Err: '+e.message, false);
+                add('Errore: ' + e.message, false);
             }
         }
         
         function use(tool) {
             toggle();
-            add('→ '+tool.toUpperCase(), true);
-            setTimeout(function(){ add(reps[tool]); }, 300);
+            add('→ ' + tool.toUpperCase(), true);
+            setTimeout(function() { add(reps[tool]); }, 300);
         }
         
-        localStorage.removeItem('claw_api_key');
-        localStorage.removeItem('claw_key');
+        document.getElementById('msgInput').onkeypress = function(e) {
+            if (e.key === 'Enter') send();
+        };
         
-        const saved = localStorage.getItem('claw_key');
-        if(saved) { document.getElementById('apiKey').value = saved.slice(0,15)+'...'; key = saved; }
-        
-        add('Ciao! Scrivi solo testo.\n1.Inserisci API Key\n2.Test\n3.Scrivi', false);
+        add('Ciao! Scrivi SOLO testo.\n1. Inserisci API Key\n2. Test\n3. Scrivi', false);
     </script>
 </body>
 </html>
