@@ -11,7 +11,7 @@
     <link rel="manifest" href="manifest.json">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root { --primary: #007AFF; --bg: #000000; --surface: #1C1C1E; --surface2: #2C2C2E; --text: #FFFFFF; --text2: #8E8E93; }
+        :root { --primary: #007AFF; --bg: #000000; --surface: #1C1C1E; --surface2: #2C2C2E; --text: #FFFFFF; --text2: #8E8E93; --success: #30D158; --error: #FF453A; }
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
         .app-container { display: flex; flex-direction: column; height: 100vh; }
         .header { padding: 60px 20px 20px; background: var(--bg); border-bottom: 1px solid var(--surface2); }
@@ -24,6 +24,7 @@
         .message-bubble { display: inline-block; padding: 12px 16px; border-radius: 18px; max-width: 80%; font-size: 16px; line-height: 1.4; white-space: pre-wrap; }
         .message.user .message-bubble { background: var(--primary); color: white; border-bottom-right-radius: 4px; }
         .message.assistant .message-bubble { background: var(--surface); border-bottom-left-radius: 4px; }
+        .message.error .message-bubble { background: var(--error); }
         .input-container { padding: 12px 20px 40px; background: var(--bg); border-top: 1px solid var(--surface2); }
         .input-wrapper { display: flex; align-items: center; background: var(--surface); border-radius: 22px; padding: 4px; }
         .input-wrapper input { flex: 1; background: transparent; border: none; color: var(--text); font-size: 16px; padding: 12px 16px; outline: none; }
@@ -42,11 +43,13 @@
         .loading span:nth-child(1) { animation-delay: -0.32s; }
         .loading span:nth-child(2) { animation-delay: -0.16s; }
         @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
-        .api-key-input { background: var(--surface); padding: 12px 16px; border-radius: 12px; margin-bottom: 16px; }
+        .api-key-section { padding: 0 20px 16px; }
+        .api-key-input { background: var(--surface); padding: 14px; border-radius: 12px; }
         .api-key-input label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 8px; }
-        .api-key-input input { width: 100%; background: var(--surface2); border: none; color: var(--text); font-size: 14px; padding: 10px 12px; border-radius: 8px; }
-        .api-key-input button { background: var(--primary); color: white; border: none; padding: 10px 16px; border-radius: 8px; margin-top: 8px; font-size: 14px; cursor: pointer; }
+        .api-key-input input { width: 100%; background: var(--surface2); border: none; color: var(--text); font-size: 14px; padding: 10px 12px; border-radius: 8px; margin-bottom: 8px; }
+        .api-key-input button { background: var(--primary); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-size: 14px; cursor: pointer; width: 100%; }
         .api-key-input button.saved { background: var(--success); }
+        .status { font-size: 12px; margin-top: 8px; color: var(--text2); }
     </style>
 </head>
 <body>
@@ -63,16 +66,17 @@
                 <div class="tool-item" onclick="useTool('technical')"><h4>📊 Technical</h4><p>Citadel style</p></div>
                 <div class="tool-item" onclick="useTool('portfolio')"><h4>💼 Portfolio</h4><p>BlackRock style</p></div>
                 <div class="tool-item" onclick="useTool('earnings')"><h4>📋 Earnings</h4><p>JPMorgan style</p></div>
-                <div class="tool-item" onclick="useTool('dividend')"><h4>💵 Dividendi</h4><p>Harvard style</p></div>
-                <div class="tool-item" onclick="useTool('macro')"><h4>🌍 Macro</h4><p>McKinsey style</p></div>
+            </div>
+        </div>
+        <div class="api-key-section">
+            <div class="api-key-input">
+                <label>API Key (opzionale)</label>
+                <input type="password" id="apiKey" placeholder="sk-ant-... o gsk_...">
+                <button onclick="saveApiKey()" id="apiKeyBtn">Salva API Key</button>
+                <div class="status" id="status"></div>
             </div>
         </div>
         <div class="input-container">
-            <div class="api-key-input">
-                <label>API Key (opzionale per AI avanzata)</label>
-                <input type="password" id="apiKey" placeholder="sk-ant-...">
-                <button onclick="saveApiKey()" id="apiKeyBtn">Salva</button>
-            </div>
             <div class="input-wrapper">
                 <input type="text" id="messageInput" placeholder="Scrivi un messaggio..." onkeypress="handleKeyPress(event)">
                 <button class="send-btn" onclick="sendMessage()"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
@@ -84,38 +88,42 @@
         const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions';
         
         let apiKey = localStorage.getItem('claw_api_key') || '';
-        let messages = [{role: 'user', content: 'Sei Claw, un assistente AI specializzato in analisi finanziaria. Rispondi in italiano.'}];
+        let conversation = [{role: 'user', content: 'Sei Claw, assistente AI per analisi finanziaria. Rispondi in italiano, breve e chiaro.'}];
         
         const responses = {
-            'stock': "📈 **Stock Screener - Goldman Sachs**\n\nPer analisi completa:\n• Ticker azione\n• Settore preferito\n• Criteri di screening\n\n*Invia i dettagli.*",
-            'dcf': "💰 **DCF Valuation - Morgan Stanley**\n\nPer valutazione DCF:\n• Ticker azienda\n• Proiezioni finanziarie\n\n*Invia il nome.*",
-            'risk': "⚠️ **Risk Analysis - Bridgewater**\n\nPer analisi rischio:\n• Posizioni attuali\n• Capitale totale\n\n*Invia i dettagli.*",
-            'technical': "📊 **Technical Analysis - Citadel**\n\nPer analisi tecnica:\n• Ticker\n• Timeframe\n\n*Invia i dettagli.*",
-            'portfolio': "💼 **Portfolio - BlackRock**\n\nPer costruire portafoglio:\n• Capitale disponibile\n• Obiettivi\n• Rischio\n\n*Invia i tuoi dati.*",
-            'earnings': "📋 **Earnings - JPMorgan**\n\nPer analisi pre-earnings:\n• Ticker\n• Data earnings\n\n*Invia i dettagli.*",
-            'dividend': "💵 **Dividend Portfolio - Harvard**\n\nPer portafoglio dividendi:\n• Capitale\n• Anni orizzonte\n\n*Invia i dettagli.*",
-            'macro': "🌍 **Macro Analysis - McKinsey**\n\nPer analisi macro:\n• Portafoglio attuale\n• Focus geografico\n\n*Invia i dettagli.*"
+            'stock': "📈 **Stock Screener**\n\nPer analisi: \n• Ticker azione\n• Settore\n• Criteri\n\n*Invia i dettagli*",
+            'dcf': "💰 **DCF Valuation**\n\nPer valutazione:\n• Ticker\n• Proiezioni\n\n*Invia il nome*",
+            'risk': "⚠️ **Risk Analysis**\n\nPer analisi rischio:\n• Posizioni\n• Capitale\n\n*Invia i dettagli*",
+            'technical': "📊 **Technical**\n\nPer analisi tecnica:\n• Ticker\n• Timeframe\n\n*Invia i dettagli*",
+            'portfolio': "💼 **Portfolio**\n\nPer costruire:\n• Capitale\n• Obiettivi\n• Rischio\n\n*Invia i dati*",
+            'earnings': "📋 **Earnings**\n\nPer analisi:\n• Ticker\n• Data\n\n*Invia i dettagli*"
         };
+        
+        function log(msg) {
+            document.getElementById('status').textContent = msg;
+        }
         
         function init() {
             if (apiKey) {
-                document.getElementById('apiKey').value = apiKey.substring(0, 10) + '...';
-                document.getElementById('apiKeyBtn').textContent = 'Salvata ✓';
+                document.getElementById('apiKey').value = apiKey.substring(0, 12) + '...';
+                document.getElementById('apiKeyBtn').textContent = '✓ Salvata';
                 document.getElementById('apiKeyBtn').classList.add('saved');
+                log('API Key configurata');
             }
-            addMessage("Ciao! Sono Claw, il tuo assistente AI finanziario.\n\nScegli uno strumento o scrivi cosa ti serve.", false);
+            addMessage("Ciao! 👋\nSono Claw, assistente AI finanziario.\n\nScegli uno strumento o scrivi cosa ti serve.", false);
         }
         
         function saveApiKey() {
-            const input = document.getElementById('apiKey');
-            const key = input.value.trim();
-            if (key) {
+            const key = document.getElementById('apiKey').value.trim();
+            if (key.length > 10) {
                 apiKey = key;
                 localStorage.setItem('claw_api_key', key);
-                input.value = key.substring(0, 10) + '...';
-                document.getElementById('apiKeyBtn').textContent = 'Salvata ✓';
+                document.getElementById('apiKeyBtn').textContent = '✓ Salvata';
                 document.getElementById('apiKeyBtn').classList.add('saved');
-                addMessage("API key salvata! Usa l'AI avanzata.", false);
+                log('API Key salvata!');
+                addMessage("API Key configurata! L'AI è ora attiva.", false);
+            } else {
+                log('Inserisci una chiave valida (min 10 caratteri)');
             }
         }
         
@@ -136,7 +144,8 @@
             if (t) t.remove();
         }
         
-        async function callAnthropic(userMsg) {
+        async function callAnthropic(msg) {
+            log('Chiamando Anthropic...');
             const res = await fetch(ANTHROPIC_API, {
                 method: 'POST',
                 headers: {
@@ -147,14 +156,16 @@
                 body: JSON.stringify({
                     model: 'claude-3-haiku-20240307',
                     max_tokens: 1024,
-                    messages: [...messages, {role: 'user', content: userMsg}]
+                    messages: [...conversation, {role: 'user', content: msg}]
                 })
             });
             const data = await res.json();
-            return data.content?.[0]?.text || data.error?.message || 'Errore';
+            if (data.error) throw new Error(data.error.message);
+            return data.content[0].text;
         }
         
-        async function callGroq(userMsg) {
+        async function callGroq(msg) {
+            log('Chiamando Groq...');
             const res = await fetch(GROQ_API, {
                 method: 'POST',
                 headers: {
@@ -163,12 +174,13 @@
                 },
                 body: JSON.stringify({
                     model: 'llama-3-70b-8192',
-                    messages: [...messages, {role: 'user', content: userMsg}],
+                    messages: [...conversation, {role: 'user', content: msg}],
                     max_tokens: 1024
                 })
             });
             const data = await res.json();
-            return data.choices?.[0]?.message?.content || data.error?.message || 'Errore';
+            if (data.error) throw new Error(data.error.message);
+            return data.choices[0].message.content;
         }
         
         async function sendMessage() {
@@ -182,9 +194,10 @@
             
             try {
                 let response;
-                messages.push({role: 'user', content});
+                conversation.push({role: 'user', content});
                 
                 if (apiKey) {
+                    log('Elaborazione...');
                     if (apiKey.startsWith('sk-ant-')) {
                         response = await callAnthropic(content);
                     } else if (apiKey.startsWith('gsk_')) {
@@ -200,26 +213,30 @@
                     else if (lower.includes('tecnica')) response = responses['technical'];
                     else if (lower.includes('portafoglio') || lower.includes('portfolio')) response = responses['portfolio'];
                     else if (lower.includes('earning') || lower.includes('utili')) response = responses['earnings'];
-                    else if (lower.includes('dividendo')) response = responses['dividend'];
-                    else if (lower.includes('macro')) response = responses['macro'];
-                    else response = "Scrivi cosa ti serve o usa i pulsanti sopra!";
+                    else response = "Scrivi cosa ti serve o usa i pulsanti!";
                 }
                 
                 hideTyping();
                 addMessage(response, false);
-                messages.push({role: 'assistant', content: response});
+                conversation.push({role: 'assistant', content: response});
+                log('');
             } catch (e) {
                 hideTyping();
-                addMessage("Errore: " + e.message, false);
+                addMessage("❌ Errore: " + e.message, false);
+                log('Errore: ' + e.message);
             }
         }
         
         function useTool(tool) {
-            addMessage(`Tool: ${tool.toUpperCase()}`, true);
-            setTimeout(() => addMessage(responses[tool]), 500);
+            addMessage(`→ ${tool.toUpperCase()}`, true);
+            setTimeout(() => addMessage(responses[tool]), 300);
         }
         
         function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
+        
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(() => log('Offline ready'));
+        }
         init();
     </script>
 </body>
