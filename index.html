@@ -2,107 +2,95 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Claw">
     <meta name="theme-color" content="#007AFF">
-    <title>Claw - AI</title>
-    <link rel="manifest" href="manifest.json">
+    <title>Claw</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root { --primary: #007AFF; --bg: #000000; --surface: #1C1C1E; --surface2: #2C2C2E; --text: #FFFFFF; --text2: #8E8E93; --success: #30D158; }
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+        :root { --p: #007AFF; --bg: #000; --s: #1C1C1E; --s2: #2C2C2E; --t: #FFF; --t2: #8E8E93; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--t); height: 100vh; overflow: hidden; }
         
-        .sidebar {
-            position: fixed; top: 0; right: -280px; width: 280px; height: 100%;
-            background: var(--surface); z-index: 100; transition: right 0.3s ease;
-            padding: 80px 20px 20px; overflow-y: auto;
-        }
+        .sidebar { position: fixed; top: 0; right: -280px; width: 280px; height: 100%; background: var(--s); transition: right .3s; z-index: 100; padding: 80px 20px; overflow-y: auto; }
         .sidebar.open { right: 0; }
-        .sidebar-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); z-index: 99; opacity: 0; pointer-events: none;
-            transition: opacity 0.3s ease;
-        }
-        .sidebar-overlay.show { opacity: 1; pointer-events: auto; }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 99; }
+        .overlay.show { opacity: 1; pointer-events: auto; }
         
         .header { padding: 60px 20px 20px; display: flex; justify-content: space-between; align-items: center; }
         .header h1 { font-size: 34px; font-weight: 700; }
-        .menu-btn { background: var(--surface); border: none; padding: 12px; border-radius: 12px; cursor: pointer; }
-        .menu-btn svg { width: 24px; height: 24px; fill: var(--text); }
+        .menu-btn { background: var(--s); border: none; padding: 12px; border-radius: 12px; cursor: pointer; }
+        .menu-btn svg { width: 24px; height: 24px; fill: var(--t); }
         
-        .sidebar .tool-item { background: var(--surface2); padding: 16px; border-radius: 12px; margin-bottom: 10px; cursor: pointer; }
-        .sidebar .tool-item h4 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-        .sidebar .tool-item p { font-size: 12px; color: var(--text2); }
+        .tool-item { background: var(--s2); padding: 16px; border-radius: 12px; margin-bottom: 10px; cursor: pointer; }
+        .tool-item h4 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+        .tool-item p { font-size: 12px; color: var(--t2); }
         
-        .chat-container { flex: 1; overflow-y: auto; padding: 20px; }
-        .message { margin-bottom: 20px; animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .message.user { text-align: right; }
-        .message-bubble { display: inline-block; padding: 12px 16px; border-radius: 18px; max-width: 85%; font-size: 16px; line-height: 1.4; white-space: pre-wrap; }
-        .message.user .message-bubble { background: var(--primary); color: white; border-bottom-right-radius: 4px; }
-        .message.assistant .message-bubble { background: var(--surface); border-bottom-left-radius: 4px; }
+        .chat { flex: 1; overflow-y: auto; padding: 20px; }
+        .msg { margin-bottom: 20px; animation: fadeIn .3s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; } }
+        .msg.user { text-align: right; }
+        .bubble { display: inline-block; padding: 12px 16px; border-radius: 18px; max-width: 85%; font-size: 16px; white-space: pre-wrap; }
+        .msg.user .bubble { background: var(--p); color: white; border-bottom-right-radius: 4px; }
+        .msg.assistant .bubble { background: var(--s); border-bottom-left-radius: 4px; }
         
-        .input-container { padding: 12px 20px 40px; background: var(--bg); border-top: 1px solid var(--surface2); }
-        .input-wrapper { display: flex; align-items: center; background: var(--surface); border-radius: 22px; padding: 4px; }
-        .input-wrapper input { flex: 1; background: transparent; border: none; color: var(--text); font-size: 16px; padding: 12px 16px; outline: none; }
-        .input-wrapper input::placeholder { color: var(--text2); }
-        .send-btn { background: var(--primary); border: none; border-radius: 20px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .input-area { padding: 12px 20px 40px; border-top: 1px solid var(--s2); }
+        .input-wrap { display: flex; align-items: center; background: var(--s); border-radius: 22px; padding: 4px; }
+        .input-wrap input { flex: 1; background: transparent; border: none; color: var(--t); font-size: 16px; padding: 12px 16px; outline: none; }
+        .send-btn { background: var(--p); border: none; border-radius: 20px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
         .send-btn svg { width: 20px; height: 20px; fill: white; }
         
-        .loading { display: flex; gap: 4px; padding: 12px 16px; }
-        .loading span { width: 8px; height: 8px; background: var(--text2); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
-        .loading span:nth-child(1) { animation-delay: -0.32s; }
-        .loading span:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        .dots { display: flex; gap: 4px; padding: 12px 16px; }
+        .dots span { width: 8px; height: 8px; background: var(--t2); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+        .dots span:nth-child(1) { animation-delay: -.32s; }
+        .dots span:nth-child(2) { animation-delay: -.16s; }
+        @keyframes bounce { 0%,80%,100%{transform:scale(0)} 40%{transform:scale(1)} }
         
-        .api-key-section { padding: 0 20px 16px; }
-        .api-key-input { background: var(--surface); padding: 14px; border-radius: 12px; }
-        .api-key-input label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 8px; }
-        .api-key-input input { width: 100%; background: var(--surface2); border: none; color: var(--text); font-size: 14px; padding: 10px 12px; border-radius: 8px; margin-bottom: 8px; }
-        .api-key-input button { background: var(--primary); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-size: 14px; cursor: pointer; width: 100%; }
-        .api-key-input button.saved { background: var(--success); }
-        .status { font-size: 12px; margin-top: 8px; color: var(--text2); min-height: 16px; }
+        .api-sec { padding: 0 20px 16px; }
+        .api-box { background: var(--s); padding: 14px; border-radius: 12px; }
+        .api-box label { display: block; font-size: 13px; color: var(--t2); margin-bottom: 8px; }
+        .api-box input { width: 100%; background: var(--s2); border: none; color: var(--t); font-size: 14px; padding: 10px 12px; border-radius: 8px; margin-bottom: 8px; }
+        .api-box button { background: var(--p); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-size: 14px; cursor: pointer; width: 100%; }
+        .api-box button.ok { background: #30D158; }
+        .status { font-size: 12px; margin-top: 8px; color: var(--t2); }
     </style>
 </head>
 <body>
-    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <div class="overlay" onclick="toggle()"></div>
     
     <div class="sidebar" id="sidebar">
-        <div style="font-size: 18px; font-weight: 600; margin-bottom: 20px;">Strumenti Finanziari</div>
-        <div class="tool-item" onclick="useTool('stock')"><h4>📈 Stock Screener</h4><p>Goldman Sachs style</p></div>
-        <div class="tool-item" onclick="useTool('dcf')"><h4>💰 DCF Valuation</h4><p>Morgan Stanley style</p></div>
-        <div class="tool-item" onclick="useTool('risk')"><h4>⚠️ Risk Analysis</h4><p>Bridgewater style</p></div>
-        <div class="tool-item" onclick="useTool('technical')"><h4>📊 Technical</h4><p>Citadel style</p></div>
-        <div class="tool-item" onclick="useTool('portfolio')"><h4>💼 Portfolio</h4><p>BlackRock style</p></div>
-        <div class="tool-item" onclick="useTool('earnings')"><h4>📋 Earnings</h4><p>JPMorgan style</p></div>
+        <div style="font-size:18px;font-weight:600;margin-bottom:20px;">Strumenti</div>
+        <div class="tool-item" onclick="use('stock')"><h4>📈 Stock</h4><p>Goldman</p></div>
+        <div class="tool-item" onclick="use('dcf')"><h4>💰 DCF</h4><p>Morgan</p></div>
+        <div class="tool-item" onclick="use('risk')"><h4>⚠️ Rischio</h4><p>Bridgewater</p></div>
+        <div class="tool-item" onclick="use('tech')"><h4>📊 Tech</h4><p>Citadel</p></div>
+        <div class="tool-item" onclick="use('port')"><h4>💼 Portafoglio</h4><p>BlackRock</p></div>
+        <div class="tool-item" onclick="use('earn')"><h4>📋 Earnings</h4><p>JPMorgan</p></div>
     </div>
     
-    <div style="display:flex; flex-direction:column; height:100vh;">
+    <div style="display:flex;flex-direction:column;height:100vh;">
         <div class="header">
             <h1>Claw</h1>
-            <button class="menu-btn" onclick="toggleSidebar()">
+            <button class="menu-btn" onclick="toggle()">
                 <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
             </button>
         </div>
         
-        <div class="chat-container" id="chat">
+        <div class="chat" id="chat">
         </div>
         
-        <div class="api-key-section">
-            <div class="api-key-input">
+        <div class="api-sec">
+            <div class="api-box">
                 <label>API Key</label>
-                <input type="password" id="apiKey" placeholder="sk-ant-api... o gsk_...">
-                <button onclick="testApiKey()" id="apiKeyBtn">Test connessione</button>
+                <input type="password" id="apiKey" placeholder="sk-ant...">
+                <button onclick="testApi()" id="apiBtn">Test</button>
                 <div class="status" id="status"></div>
             </div>
         </div>
         
-        <div class="input-container">
-            <div class="input-wrapper">
-                <input type="text" id="messageInput" placeholder="Scrivi..." onkeypress="handleKeyPress(event)">
-                <button class="send-btn" onclick="sendMessage()">
+        <div class="input-area">
+            <div class="input-wrap">
+                <input type="text" id="msgInput" placeholder="Scrivi..." onkeypress="if(e.key==='Enter')send()">
+                <button class="send-btn" onclick="send()">
                     <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                 </button>
             </div>
@@ -110,183 +98,124 @@
     </div>
     
     <script>
-        const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
-        const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions';
+        const API_ANTHROPIC = 'https://api.anthropic.com/v1/messages';
+        const API_GROQ = 'https://api.groq.com/openai/v1/chat/completions';
         
-        let apiKey = '';
-        let testResult = false;
-        let conversation = [];
+        let key = '';
+        let ok = false;
+        let conv = [];
         
-        const responses = {
-            'stock': '📈 Stock Screener\nTicker, settore, criteri',
-            'dcf': '💰 DCF\nTicker, proiezioni',
-            'risk': '⚠️ Rischio\nPosizioni, capitale',
-            'technical': '📊 Technical\nTicker, timeframe',
-            'portfolio': '💼 Portafoglio\nCapitale, obiettivi',
-            'earnings': '📋 Earnings\nTicker, data'
-        };
+        const reps = { stock:'S: Ticker, settore', dcf:'D: Ticker', risk:'R: Posizioni', tech:'T: Ticker', port:'P: Capitale', earn:'E: Ticker' };
         
-        function toggleSidebar() {
+        function toggle() {
             document.getElementById('sidebar').classList.toggle('open');
-            document.querySelector('.sidebar-overlay').classList.toggle('show');
+            document.querySelector('.overlay').classList.toggle('show');
         }
         
-        function log(msg) {
-            document.getElementById('status').textContent = msg;
+        function log(m) { document.getElementById('status').textContent = m; }
+        
+        function add(m, u) {
+            const c = document.getElementById('chat');
+            c.innerHTML += '<div class="msg ' + (u?'user':'assistant') + '"><div class="bubble">' + m + '</div></div>';
+            c.scrollTop = c.scrollHeight;
         }
         
-        function addMessage(content, isUser) {
-            const chat = document.getElementById('chat');
-            chat.innerHTML += '<div class="message ' + (isUser ? 'user' : 'assistant') + '"><div class="message-bubble">' + content + '</div></div>';
-            chat.scrollTop = chat.scrollHeight;
+        function showLoad() {
+            const c = document.getElementById('chat');
+            c.innerHTML += '<div class="msg assistant" id="load"><div class="dots"><span></span><span></span></div></div>';
+            c.scrollTop = c.scrollHeight;
         }
         
-        function showTyping() {
-            const chat = document.getElementById('chat');
-            chat.innerHTML += '<div class="message assistant" id="typing"><div class="loading"><span></span><span></span><span></span></div></div>';
-            chat.scrollTop = chat.scrollHeight;
-        }
+        function hideLoad() { var t=document.getElementById('load'); if(t)t.remove(); }
         
-        function hideTyping() {
-            const t = document.getElementById('typing');
-            if (t) t.remove();
-        }
-        
-        async function testApiKey() {
-            const inputKey = document.getElementById('apiKey').value.trim();
-            if (inputKey) {
-                apiKey = inputKey;
-                localStorage.setItem('claw_api_key', apiKey);
-            } else {
-                apiKey = localStorage.getItem('claw_api_key') || '';
-            }
+        async function testApi() {
+            const k = document.getElementById('apiKey').value.trim();
+            if(k) { key = k; localStorage.setItem('claw_key', k); }
+            else { key = localStorage.getItem('claw_key') || ''; }
             
-            if (!apiKey) {
-                log('Inserisci API Key');
-                return;
-            }
+            if(!key) { log('Inserisci key'); return; }
             
             log('Test...');
             
             try {
-                let response;
-                if (apiKey.startsWith('sk-ant-')) {
-                    response = await callAnthropic('OK');
-                } else if (apiKey.startsWith('gsk_')) {
-                    response = await callGroq('OK');
-                } else {
-                    response = await callAnthropic('OK');
-                }
+                let r;
+                if(key.startsWith('sk-ant-')) r = await callAnthropic('OK');
+                else if(key.startsWith('gsk_')) r = await callGroq('OK');
+                else r = await callAnthropic('OK');
                 
-                testResult = true;
-                conversation = [{role: 'user', content: 'Rispondi in italiano.'}];
-                document.getElementById('apiKeyBtn').textContent = '✓ Connesso!';
-                document.getElementById('apiKeyBtn').classList.add('saved');
+                ok = true;
+                conv = [{role:'user',content:'Rispondi it.'}];
+                document.getElementById('apiBtn').textContent = '✓ OK';
+                document.getElementById('apiBtn').classList.add('ok');
                 log('OK!');
-                addMessage('Ciao! 👋 AI attiva.', false);
-            } catch (e) {
-                testResult = false;
-                log('Errore: ' + e.message);
+                add('Ciao! 👋', false);
+            } catch(e) {
+                ok = false;
+                log('Err: '+e.message);
             }
         }
         
         async function callAnthropic(msg) {
-            const res = await fetch(ANTHROPIC_API, {
+            const res = await fetch(API_ANTHROPIC, {
                 method: 'POST',
-                headers: {
-                    'x-api-key': apiKey,
-                    'anthropic-version': '2023-06-01',
-                    'content-type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: 'claude-3-haiku-20240307',
-                    max_tokens: 512,
-                    messages: [...conversation, {role: 'user', content: msg}]
-                })
+                headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+                body: JSON.stringify({ model: 'claude-3-haiku-20240307', max_tokens: 500, messages: [...conv,{role:'user',content:msg}] })
             });
-            
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.error?.message || 'HTTP ' + res.status);
-            }
-            
-            const data = await res.json();
-            if (data.error) throw new Error(data.error.message);
-            return data.content[0].text;
+            if(!res.ok) { const e=await res.json(); throw new Error(e.error?.message||'err'); }
+            const d = await res.json();
+            if(d.error) throw new Error(d.error.message);
+            return d.content[0].text;
         }
         
         async function callGroq(msg) {
-            const res = await fetch(GROQ_API, {
+            const res = await fetch(API_GROQ, {
                 method: 'POST',
-                headers: {
-                    'Authorization': 'Bearer ' + apiKey,
-                    'content-type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: 'llama-3-70b-8192',
-                    messages: [...conversation, {role: 'user', content: msg}],
-                    max_tokens: 512
-                })
+                headers: { 'Authorization': 'Bearer '+key, 'content-type': 'application/json' },
+                body: JSON.stringify({ model: 'llama-3-70b-8192', messages: [...conv,{role:'user',content:msg}], max_tokens: 500 })
             });
-            
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.error?.message || 'HTTP ' + res.status);
-            }
-            
-            const data = await res.json();
-            if (data.error) throw new Error(data.error.message);
-            return data.choices[0].message.content;
+            if(!res.ok) { const e=await res.json(); throw new Error(e.error?.message||'err'); }
+            const d = await res.json();
+            if(d.error) throw new Error(d.error.message);
+            return d.choices[0].message.content;
         }
         
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const content = input.value.trim();
-            if (!content) return;
+        async function send() {
+            const txt = document.getElementById('msgInput').value.trim();
+            if(!txt) return;
+            if(!ok) { add('Testa prima API', false); return; }
             
-            if (!testResult) {
-                addMessage('Testa prima API con pulsante', false);
-                return;
-            }
-            
-            addMessage(content, true);
-            input.value = '';
-            showTyping();
+            add(txt, true);
+            document.getElementById('msgInput').value = '';
+            showLoad();
             
             try {
-                let response;
-                conversation.push({role: 'user', content});
+                conv.push({role:'user',content:txt});
+                let r;
+                if(key.startsWith('sk-ant-')) r = await callAnthropic(txt);
+                else r = await callGroq(txt);
                 
-                if (apiKey.startsWith('sk-ant-')) {
-                    response = await callAnthropic(content);
-                } else {
-                    response = await callGroq(content);
-                }
-                
-                hideTyping();
-                addMessage(response, false);
-                conversation.push({role: 'assistant', content: response});
-            } catch (e) {
-                hideTyping();
-                addMessage('Errore: ' + e.message, false);
+                hideLoad();
+                add(r, false);
+                conv.push({role:'assistant',content:r});
+            } catch(e) {
+                hideLoad();
+                add('Err: '+e.message, false);
             }
         }
         
-        function useTool(tool) {
-            toggleSidebar();
-            addMessage('→ ' + tool.toUpperCase(), true);
-            setTimeout(function() { addMessage(responses[tool]); }, 300);
+        function use(tool) {
+            toggle();
+            add('→ '+tool.toUpperCase(), true);
+            setTimeout(function(){ add(reps[tool]); }, 300);
         }
         
-        function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
+        localStorage.removeItem('claw_api_key');
+        localStorage.removeItem('claw_key');
         
-        const savedKey = localStorage.getItem('claw_api_key');
-        if (savedKey) {
-            document.getElementById('apiKey').value = savedKey.substring(0, 15) + '...';
-            apiKey = savedKey;
-        }
+        const saved = localStorage.getItem('claw_key');
+        if(saved) { document.getElementById('apiKey').value = saved.slice(0,15)+'...'; key = saved; }
         
-        addMessage('Ciao! 👋\n\n1. API Key\n2. Test\n3. Scrivi\n\nO.menu=strumenti', false);
+        add('Ciao! Scrivi solo testo.\n1.Inserisci API Key\n2.Test\n3.Scrivi', false);
     </script>
 </body>
 </html>
