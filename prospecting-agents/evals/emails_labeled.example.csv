@@ -1,0 +1,17 @@
+nome,email,verification,mx,smtp,label
+Mario Rossi,mario.rossi@example1.it,valid,si,,valido
+Luca Bianchi,luca.bianchi@example1.it,valid,si,,valido
+Elena Verdi,elena.verdi@example1.it,valid,si,,valido
+Anna Neri,anna.neri@example1.it,valid,si,,valido
+Marco Gallo,marco.gallo@example1.it,valid,si,,valido
+Matteo Rosa,matteo.rosa@example1.it,accept_all,si,,valido
+Sara Blu,s.blu@example1.it,accept_all,si,,valido
+Giulia Gialli,giulia.gialli@example1.it,accept_all,si,inesistente,inesistente
+Paolo Viola,paolo.viola@nodomain-xyz.zz,accept_all,no,,inesistente
+Franco Corti,franco.corti@nodomain-xyz.zz,valid,no,,inesistente
+Chiara Longo,chiara.longo@example2.org,valid,si,,valido
+Davide Costa,davide.costa@example2.org,valid,si,,valido
+Ilaria Ricci,ilaria.ricci@example2.org,valid,si,,valido
+Ada Moro,ada.moro@example2.org,accept_all,si,,valido
+Nadia Ferro,nadia.ferro@deadhost.qq,accept_all,nd,inesistente,inesistente
+Ugo Pace,ugo.pace@example2.org,accept_all,si,inesistente,inesistente

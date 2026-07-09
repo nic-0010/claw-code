@@ -1,0 +1,31 @@
+# PRIVACY: dati reali e master NON entrano MAI nel repo (spec § Regole trasversali #1)
+*.xlsx
+!evals/**/*.example.*
+master_*.xlsx
+export/
+archivio/
+
+# Output di lavoro (contengono PII dei lead)
+backup/*
+logs/*
+reports/*
+bozze/*
+!backup/.gitkeep
+!logs/.gitkeep
+!reports/.gitkeep
+!bozze/.gitkeep
+
+# Config locale con path reali
+config.local.yaml
+
+# Eval con dati reali (solo l'esempio è versionato)
+evals/emails_labeled.csv
+evals/replies_labeled.jsonl
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/

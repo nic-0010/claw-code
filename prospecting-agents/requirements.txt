@@ -1,0 +1,9 @@
+# Solo librerie gratuite (vincolo costo zero).
+pandas
+openpyxl
+dnspython
+feedparser
+apscheduler
+requests
+pyyaml
+pytest
