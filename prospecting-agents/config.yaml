@@ -1,0 +1,49 @@
+# Configurazione sistema prospecting — vincolo costo zero.
+# Copia questo file, adatta i path locali, NON committare percorsi/dati reali.
+
+# Path del master Excel (NON versionato: contiene PII dei lead).
+master_path: "master_prospecting_generali.xlsx"
+
+# Export CSV da Outlook per lo scanner (Componente A, fase 1).
+outlook_export_csv: "export/outlook_export.csv"
+
+# Archivio lead per il refill (Componente B).
+lead_archive: "archivio/lead_archive.xlsx"
+
+# Mittente reale usato da SMTP-probe (Componente C, --smtp) e come From delle bozze.
+sender_email: "nicolo.porru@generali.com"
+sender_name: "Nicolò Porru"
+
+# Cap giornalieri del batch (Componente B).
+caps:
+  totale: 30
+  fredde: 12
+  follow_up: 10
+  riprese: 5
+  accept_all: 3
+  stesso_dominio: 8
+
+# Domini da NON contattare mai (congelati).
+domini_congelati:
+  - sace.it
+
+# Scorta minima di lead 'valid' non ancora accodati prima del refill automatico.
+soglia_scorta: 60   # ~5 giorni
+
+# Cartelle di lavoro (relative alla root del progetto).
+paths:
+  backup: "backup"
+  logs: "logs"
+  reports: "reports"
+  bozze: "bozze"
+
+# Parametri del verificatore email (Componente C).
+verifier:
+  min_examples_for_pattern: 3   # esempi 'valid' per dichiarare un pattern di dominio
+  dns_timeout_s: 5
+  smtp:
+    enabled: false              # attivare solo con --smtp
+    timeout_s: 10
+    max_probe_per_domain: 5
+    seconds_between_probe: 3
+    max_unknown_streak: 3       # 3 'sconosciuto' di fila su un dominio → salta il resto
