@@ -1,0 +1,14 @@
+{"mittente": "mario.rossi@ente1.it", "oggetto": "RE: Un secondo parere", "corpo": "Buongiorno, mi interessa. Possiamo sentirci giovedì mattina? Mi mandi la sintesi di una pagina.", "label": "positiva"}
+{"mittente": "luca.bianchi@ente1.it", "oggetto": "RE: Previdenza", "corpo": "Sì, va bene per venerdì alle 14:30, le confermo l'appuntamento su Teams.", "label": "positiva"}
+{"mittente": "elena.verdi@ente2.org", "oggetto": "RE: confronto", "corpo": "Volentieri, sentiamoci la prossima settimana. A che ora le va bene?", "label": "positiva"}
+{"mittente": "paolo.neri@ente2.org", "oggetto": "RE: previdenza integrativa", "corpo": "La ringrazio ma ho già un consulente di fiducia che segue la mia posizione da anni.", "label": "rifiuto"}
+{"mittente": "anna.gallo@ente3.it", "oggetto": "RE: proposta", "corpo": "Non sono interessata, grazie. Chiedo di non essere ricontattata.", "label": "rifiuto"}
+{"mittente": "furio.blu@ente3.it", "oggetto": "RE: pianificazione", "corpo": "Grazie ma non è di mio interesse al momento, sono già coperto con la polizza aziendale.", "label": "rifiuto"}
+{"mittente": "sara.rosa@ente4.it", "oggetto": "RE: welfare", "corpo": "Per questi temi può rivolgersi a Marco Longhi (marco.longhi@ente4.it), il collega che se ne occupa per tutto l'ente.", "label": "referente_indicato"}
+{"mittente": "dino.viola@ente4.it", "oggetto": "RE: coperture", "corpo": "Non me ne occupo io: giro la sua mail a chi segue il personale, laura.corti@ente4.it.", "label": "referente_indicato"}
+{"mittente": "postmaster@ente5.it", "oggetto": "Undeliverable: Un secondo parere sulla sua posizione", "corpo": "Delivery has failed to these recipients: carlo.forti@ente5.it. The email address you entered couldn't be found.", "label": "bounce"}
+{"mittente": "mailer-daemon@mailserver.net", "oggetto": "Mail delivery failed: returning message to sender", "corpo": "The following address failed: giulia.monti@ente5.it — 550 mailbox unavailable.", "label": "bounce"}
+{"mittente": "ugo.riva@ente6.it", "oggetto": "Automatic reply: Previdenza e tutele", "corpo": "Sono assente dal 10 al 20 agosto. Per urgenze contattare la segreteria.", "label": "auto_reply"}
+{"mittente": "eva.serra@ente6.it", "oggetto": "Risposta automatica: confronto riservato", "corpo": "SONO ASSENTE. RIENTRERO' IN UFFICIO IL GIORNO 22. Per urgenze contattare i colleghi.", "label": "auto_reply"}
+{"mittente": "leo.fabbri@ente7.it", "oggetto": "RE: la sua posizione", "corpo": "Buongiorno, ricevo la sua mail. Di cosa si tratta esattamente? Non ho capito il contesto.", "label": "altro"}
+{"mittente": "ida.greco@ente7.it", "oggetto": "R: verifica dedicata", "corpo": "Inoltro ricevuto per conoscenza.", "label": "altro"}

@@ -2,8 +2,9 @@
 pandas
 openpyxl
 dnspython
-feedparser
 apscheduler
 requests
 pyyaml
 pytest
+# opzionale: il trigger monitor ha un fallback integrato su xml.etree
+feedparser

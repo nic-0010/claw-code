@@ -9,9 +9,9 @@ componenti producono **bozze e report**, l'umano rilegge e preme invio.
 | | Modulo | Scopo | Stato |
 |---|---|---|---|
 | **C** | `verifier/email_verifier.py` | Abbatte il rimbalzo (~9% → ≤3%): pattern per dominio, MX, SMTP-probe opzionale. Non tocca il master. | ✅ dry-run + eval |
-| **A** | `scanner/reply_scanner.py` | Classifica le risposte e aggiorna il Registro; fa avanzare i follow-up. | ⏳ |
-| **B** | `queue/queue_builder.py` | Batch giornaliero + V4 + auto-rifornimento (mai a secco). | ⏳ |
-| **D** | `triggers/trigger_monitor.py` | Segnali reali sugli enti (Google News RSS). | ⏳ |
+| **A** | `scanner/reply_scanner.py` | Classifica le risposte (deterministico → Ollama locale) e aggiorna il Registro; segnala follow-up/riprese maturi. | ✅ + eval |
+| **B** | `queue/queue_builder.py` | Batch giornaliero (split A/B/C, cap, esclusioni) + bozze `.eml` + auto-rifornimento con V4 (mai a secco). | ✅ |
+| **D** | `triggers/trigger_monitor.py` | Segnali reali sugli enti (Google News RSS, dedup SQLite) → `trigger_oggi.md`. | ✅ |
 
 ## Moduli condivisi
 - `common/email_matrix.py` — **Matrice V4** ruolo×società: `build_email(nome, azienda, ruolo) -> (subject, body, tag)`. Modulo puro, nessuna AI, testato a snapshot sulle 24 combinazioni.
@@ -28,6 +28,21 @@ cp config.yaml config.local.yaml        # adatta i path locali
 python -m verifier.email_verifier --config config.local.yaml
 python -m verifier.email_verifier --config config.local.yaml --smtp   # probe SMTP prudente
 
+# Scanner risposte (Componente A) — dry-run di default
+python -m scanner.reply_scanner --config config.local.yaml
+python -m scanner.reply_scanner --config config.local.yaml --apply
+
+# Queue builder (Componente B) — bozze .eml + riepilogo.html in bozze/YYYYMMDD/
+python -m queue.queue_builder --config config.local.yaml
+python -m queue.queue_builder --config config.local.yaml --apply      # abilita refill
+python -m queue.lead_refill  --config config.local.yaml --apply       # rifornimento archivio
+
+# Trigger monitor (Componente D) — reports/trigger_oggi.md
+python -m triggers.trigger_monitor --config config.local.yaml
+
+# Orchestrazione mattutina (APScheduler, feriali 07:30/07:45/08:00)
+python scheduler.py --config config.local.yaml
+
 # Matrice V4
 python -m evals.gen_matrix_snapshots            # rigenera gli snapshot
 python -m evals.gen_matrix_snapshots --check    # verifica stabilità
@@ -35,6 +50,7 @@ python -m evals.gen_matrix_snapshots --check    # verifica stabilità
 # Test + eval
 python -m pytest tests/ -q
 python -m evals.eval_verifier
+python -m evals.eval_scanner
 ```
 
 ## Privacy

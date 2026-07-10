@@ -32,8 +32,17 @@ python -m evals.eval_verifier                   # soglie del verificatore
 - [x] `common/email_matrix.py` — Matrice V4 ruolo×società (puro) + 24 snapshot + test
 - [x] `verifier/email_verifier.py` — Componente C in dry-run + eval (precision ≥95%)
 - [x] `common/scrubber.py`, `common/notify.py`
-- [ ] Componente A `scanner/reply_scanner.py`
-- [ ] Componente B `queue/queue_builder.py`
-- [ ] Componente D `triggers/trigger_monitor.py`
+- [x] Componente A `scanner/reply_scanner.py` + eval (accuracy ≥90%, zero FP su `positiva`)
+- [x] Componente B `queue/queue_builder.py` + `queue/lead_refill.py`
+- [x] Componente D `triggers/trigger_monitor.py`
+- [x] `scheduler.py` — APScheduler feriali 07:30 D · 07:45 A · 08:00 B
 
-Ordine di implementazione dei componenti: **C → A → B → D**.
+Ordine di implementazione dei componenti: **C → A → B → D** (completato).
+
+## Note tecniche
+- Il pacchetto `queue/` (nome da spec) ri-esporta le API stdlib in
+  `queue/__init__.py`: NON rimuovere quel pass-through, o urllib3/APScheduler
+  si rompono quando la root del progetto è in sys.path.
+- Lo scanner usa Ollama locale se raggiungibile (`--classifier auto`), con
+  fallback euristico deterministico; l'eval gira su entrambi.
+- `feedparser` è opzionale: il trigger monitor ha un fallback su xml.etree.
