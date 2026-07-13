@@ -149,14 +149,25 @@ def read_enti(master_path: str | Path, max_enti: int | None = None) -> list[str]
     wb = io.load(master_path, data_only=True)
     if "Ranking aziende" not in wb.sheetnames:
         return []
+    rows = io.read_rows(wb, "Ranking aziende")
+    if not rows:
+        return []
+    # la colonna dell'ente ha intestazioni variabili nel master reale
+    # ("Azienda/ente", "Azienda", "Ente", "Nome"): match per prefisso,
+    # altrimenti la prima colonna del foglio.
+    headers = [k for k in rows[0].keys() if k != "_row"]
+    col = next(
+        (h for h in headers
+         if h.lower().startswith(("azienda", "ente", "nome"))),
+        headers[0] if headers else None,
+    )
+    if col is None:
+        return []
     enti = []
-    for r in io.read_rows(wb, "Ranking aziende"):
-        # il nome ente è la prima colonna testuale non vuota della riga
-        for key in ("Azienda", "Ente", "Nome"):
-            v = str(r.get(key) or "").strip()
-            if v:
-                enti.append(v)
-                break
+    for r in rows:
+        v = str(r.get(col) or "").strip()
+        if v:
+            enti.append(v)
     if max_enti:
         enti = enti[:max_enti]
     return enti

@@ -93,3 +93,18 @@ def test_read_enti(tmp_path):
     wb.save(p)
     assert tm.read_enti(p) == ["GSE", "Regione Lazio", "MPS"]
     assert tm.read_enti(p, max_enti=2) == ["GSE", "Regione Lazio"]
+
+
+def test_read_enti_intestazione_master_reale(tmp_path):
+    """Il master reale usa 'Azienda/ente' come intestazione."""
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Ranking aziende"
+    ws.append(["Azienda/ente", "Lead totali", "Valid"])
+    ws.append(["Regione Lazio", 334, 328])
+    ws.append(["Vigili del Fuoco", 284, 284])
+    p = tmp_path / "m.xlsx"
+    wb.save(p)
+    assert tm.read_enti(p) == ["Regione Lazio", "Vigili del Fuoco"]
