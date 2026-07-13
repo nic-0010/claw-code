@@ -12,3 +12,7 @@
 {"mittente": "eva.serra@ente6.it", "oggetto": "Risposta automatica: confronto riservato", "corpo": "SONO ASSENTE. RIENTRERO' IN UFFICIO IL GIORNO 22. Per urgenze contattare i colleghi.", "label": "auto_reply"}
 {"mittente": "leo.fabbri@ente7.it", "oggetto": "RE: la sua posizione", "corpo": "Buongiorno, ricevo la sua mail. Di cosa si tratta esattamente? Non ho capito il contesto.", "label": "altro"}
 {"mittente": "ida.greco@ente7.it", "oggetto": "R: verifica dedicata", "corpo": "Inoltro ricevuto per conoscenza.", "label": "altro"}
+{"mittente": "microsoftexchange1234abcd@nostrodominio.onmicrosoft.com", "oggetto": "Non recapitabile: Breve confronto su tutela e previdenza", "corpo": "Non è stato possibile recapitare il messaggio a mario.verdi@entez.it. mario.verdi non è stato trovato in entez.it.", "label": "bounce"}
+{"mittente": "carla.fonti@ente8.it", "oggetto": "[EXTERNAL] Accettata: Consulenza previdenziale", "corpo": "--- This message is from an EXTERNAL SENDER - be CAUTIOUS, particularly with links and attachments! ---", "label": "positiva"}
+{"mittente": "dario.mele@ente8.it", "oggetto": "[EXTERNAL] R: Breve confronto su welfare", "corpo": "Buonasera, grazie per la mail, copio il collega Aldo Riva di HR al fine di indirizzarla al meglio. A presto.", "label": "referente_indicato"}
+{"mittente": "rita.olmo@ente9.it", "oggetto": "[EXTERNAL] R: Breve confronto su previdenza", "corpo": "Gentilissimo, la ringrazio per la comunicazione. Resto sempre a disposizione per un colloquio. Un cordiale saluto.", "label": "positiva"}

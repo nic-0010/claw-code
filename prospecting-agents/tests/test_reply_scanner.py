@@ -37,6 +37,17 @@ def test_non_deterministico_passa_al_modello():
     assert rs.classify_deterministic("a@b.it", "RE: proposta", "mi interessa molto") is None
 
 
+def test_bounce_ndr_exchange_italiano():
+    """Pattern dai casi reali: NDR Office365/Exchange in italiano."""
+    assert rs.classify_deterministic(
+        "microsoftexchange329e71ec88ae@dominio.on", "Non recapitabile: Confronto", ""
+    ) == rs.BOUNCE
+    assert rs.classify_deterministic(
+        "a@b.it", "qualsiasi",
+        "Non è stato possibile recapitare il messaggio a x@y.it."
+    ) == rs.BOUNCE
+
+
 # --------------------------------------------------------------------------
 # Classificatore euristico
 # --------------------------------------------------------------------------
@@ -66,6 +77,32 @@ def test_euristica_ambigua_bassa_confidenza():
     out = rs.HeuristicClassifier().classify("Inoltro ricevuto per conoscenza.")
     assert out["label"] == rs.ALTRO
     assert out["confidence"] < rs.CONFIDENCE_THRESHOLD
+
+
+def test_euristica_referente_copia_collega():
+    """Pattern dai casi reali: 'copio il collega … per indirizzarla al meglio'."""
+    out = rs.HeuristicClassifier().classify(
+        "Grazie per la mail, copio il collega Aldo Riva di HR al fine di "
+        "indirizzarla al meglio."
+    )
+    assert out["label"] == rs.REFERENTE
+
+
+def test_euristica_accettazione_riunione_da_oggetto():
+    """Il segnale può stare solo nell'oggetto (corpo = solo banner EXTERNAL)."""
+    out = rs.HeuristicClassifier().classify(
+        "Oggetto: [EXTERNAL] Accettata: Consulenza previdenziale\n"
+        "--- This message is from an EXTERNAL SENDER - be CAUTIOUS ---"
+    )
+    assert out["label"] == rs.POSITIVA
+
+
+def test_euristica_disposizione_colloquio():
+    out = rs.HeuristicClassifier().classify(
+        "La ringrazio per la comunicazione. Resto sempre a disposizione per "
+        "un colloquio."
+    )
+    assert out["label"] == rs.POSITIVA
 
 
 # --------------------------------------------------------------------------

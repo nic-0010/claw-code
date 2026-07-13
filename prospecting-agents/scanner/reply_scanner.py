@@ -75,11 +75,17 @@ _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 # --------------------------------------------------------------------------
 # 1) Classificazione DETERMINISTICA (prima del modello)
 # --------------------------------------------------------------------------
-_BOUNCE_SENDERS = ("postmaster@", "mailer-daemon@", "mailerdaemon@", "noreply+bounces")
+_BOUNCE_SENDERS = ("postmaster@", "mailer-daemon@", "mailerdaemon@",
+                   "noreply+bounces", "microsoftexchange")
 _BOUNCE_SUBJECTS = (
     "undeliverable", "undelivered", "delivery status notification",
     "delivery has failed", "mail delivery failed", "mancato recapito",
     "impossibile recapitare", "returned mail", "failure notice",
+    "non recapitabile",
+)
+_BOUNCE_BODY = (
+    "non è stato possibile recapitare", "non e stato possibile recapitare",
+    "wasn't delivered", "could not be delivered", "couldn't be found",
 )
 _OOF_SUBJECTS = (
     "automatic reply", "autoreply", "auto-reply", "risposta automatica",
@@ -102,6 +108,8 @@ def classify_deterministic(mittente: str, oggetto: str, corpo: str) -> str | Non
     if any(m.startswith(p) or p in m for p in _BOUNCE_SENDERS):
         return BOUNCE
     if any(s in o for s in _BOUNCE_SUBJECTS):
+        return BOUNCE
+    if any(s in b[:800] for s in _BOUNCE_BODY):
         return BOUNCE
     if any(s in o for s in _OOF_SUBJECTS):
         return AUTO_REPLY
@@ -168,6 +176,10 @@ _H_REFERENTE = (
     "le giro il contatto", "il collega che se ne occupa", "la persona giusta è",
     "la persona giusta e", "può contattare", "puo contattare", "contatti il collega",
     "se ne occupa", "giro la sua mail a", "inoltro al collega",
+    # pattern dai casi reali (SACE): copia/inoltro esplicito a un collega
+    "copio il collega", "copio la collega", "metto in copia",
+    "inoltro la mail a", "inoltro, la mail a", "inoltro la sua mail",
+    "per indirizzarla al meglio",
 )
 _H_RIFIUTO = (
     "ho già un consulente", "ho gia un consulente", "ho già il mio consulente",
@@ -182,6 +194,10 @@ _H_POSITIVA = (
     "mi può chiamare", "mi puo chiamare", "fissiamo", "possiamo sentirci",
     "mi mandi la sintesi", "mi invii pure", "sì, va bene", "si, va bene",
     "ci vediamo", "a che ora", "quando le va bene",
+    # pattern dai casi reali: accettazione riunione (dall'oggetto, anche con
+    # prefissi tipo [EXTERNAL]) e disponibilità a un colloquio
+    "accettata:", "accepted:",
+    "disposizione per un colloquio", "disposizione per un confronto",
 )
 
 
@@ -321,7 +337,9 @@ def scan(
         if det is not None:
             label, conf, ref, sintesi = det, 1.0, None, ""
         else:
-            out = classifier.classify(corpo)
+            # il segnale può stare solo nell'oggetto (es. "Accettata: …"):
+            # il classificatore riceve oggetto + corpo.
+            out = classifier.classify(f"Oggetto: {oggetto}\n{corpo}")
             label, conf, ref, sintesi = (
                 out["label"], out["confidence"], out["referente"], out["sintesi"]
             )

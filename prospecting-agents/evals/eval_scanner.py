@@ -42,7 +42,8 @@ def classify_one(classifier, mittente: str, oggetto: str, corpo: str) -> str:
     det = classify_deterministic(mittente, oggetto, corpo)
     if det is not None:
         return det
-    return classifier.classify(corpo)["label"]
+    # come in scanner.scan(): il classificatore riceve oggetto + corpo
+    return classifier.classify(f"Oggetto: {oggetto}\n{corpo}")["label"]
 
 
 def evaluate(rows: list[dict], classifier) -> dict:
