@@ -2,7 +2,7 @@ TAG: ORGINT·DIR
 INPUT: nome='Luca Bianchi' azienda='Ministero degli Affari Esteri e della Cooperazione Internazionale' ruolo='Deputy Director'
 SUBJECT: La sua posizione previdenziale italiana (MAECI)
 ---
-Gentile Bianchi,
+Buongiorno Dott./Dott.ssa Bianchi,
 
 Chi lavora in MAECI ha in genere la posizione previdenziale italiana sospesa: i contributi maturano fuori dal circuito INPS e il montante che si costruirà in Italia va ricostruito a mano.
 
@@ -10,11 +10,10 @@ Un dato concreto: con un’aliquota marginale intorno al 43%, ogni euro versato 
 
 Non voglio in alcun modo sostituire chi la segue già: le propongo un secondo parere gratuito e riservato, senza impegno. Spesso basta un confronto per capire se la posizione attuale è ancora quella giusta, o se qualcosa è cambiato nel frattempo.
 
-Le va di sentirci nei prossimi giorni? Le anticipo una sintesi di una pagina, così arriva già con le idee chiare e senza perdere tempo.
+Le va di sentirci nei prossimi giorni? Le anticipo una sintesi di una pagina.
 
-Se invece pensa che il tema riguardi più un suo collega, mi indichi pure a chi conviene rivolgermi: la ringrazio fin d’ora.
+Se invece pensa che il tema riguardi più un suo collega, mi indichi pure a chi conviene rivolgermi.
 
-Un saluto,
 Nicolò Porru
-Generali — Wealth & Employee Benefits
-nicolo.porru@generali.com
+Wealth & Insurance Advisor — Generali Italia
+Tel +39 331 454 8168 · LinkedIn: linkedin.com/in/nicolò-porru

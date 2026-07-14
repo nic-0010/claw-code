@@ -80,7 +80,43 @@ def test_build_email_firma_e_tag():
     subject, body, tag = em.build_email("Marina Sacco", "GSE", "Director General")
     assert tag == "PARTECIPATA·C"
     assert isinstance(subject, str) and isinstance(body, str)
-    assert body.startswith("Gentile Sacco,")
+    assert body.startswith("Buongiorno Dott./Dott.ssa Sacco,")
+
+
+# Firma canonica esatta richiesta su OGNI mail (tutte le varianti/cluster).
+FIRMA_ATTESA = (
+    "Nicolò Porru\n"
+    "Wealth & Insurance Advisor — Generali Italia\n"
+    "Tel +39 331 454 8168 · LinkedIn: linkedin.com/in/nicolò-porru"
+)
+
+
+def test_firma_esatta_su_tutte_le_24_combinazioni():
+    for _, azienda in COMPANIES:
+        for _, ruolo, nome in ROLES:
+            _, body, _ = em.build_email(nome, azienda, ruolo)
+            # firma presente, esatta, e come blocco finale del corpo
+            assert FIRMA_ATTESA in body, (azienda, ruolo)
+            assert body.rstrip().endswith(FIRMA_ATTESA)
+            assert "Wealth & Insurance Advisor" in body
+            assert "+39 331 454 8168" in body
+            assert "linkedin.com/in/nicolò-porru" in body
+            # niente residui della vecchia firma
+            assert "Employee Benefits" not in body
+            assert "Un saluto," not in body
+
+
+def test_corpo_c_senza_frasi_non_approvate():
+    # le due frasi inventate rimosse non devono comparire in nessuna mail
+    for _, azienda in COMPANIES:
+        for _, ruolo, nome in ROLES:
+            _, body, _ = em.build_email(nome, azienda, ruolo)
+            assert "così arriva già con le idee chiare" not in body
+            assert "la ringrazio fin d" not in body
+    # il testo validato deve restare
+    _, body, _ = em.build_email("Marina Sacco", "GSE", "Director General")
+    assert "Le anticipo una sintesi di una pagina." in body
+    assert "non voglio in alcun modo sostituire chi la segue già".lower() in body.lower()
 
 
 def test_tag_copre_le_24_combinazioni():
