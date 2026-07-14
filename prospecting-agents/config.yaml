@@ -30,6 +30,10 @@ domini_congelati:
 # Scorta minima di lead 'valid' non ancora accodati prima del refill automatico.
 soglia_scorta: 60   # ~5 giorni
 
+# Quanti lead importare dall'archivio quando anche Nuovi contatti è sotto
+# soglia (secondo stadio dell'auto-rifornimento). Default: max(soglia*2, 100).
+refill_top_n: 120
+
 # Cartelle di lavoro (relative alla root del progetto).
 paths:
   backup: "backup"
