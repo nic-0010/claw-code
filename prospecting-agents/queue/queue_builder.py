@@ -325,14 +325,25 @@ def select_batch(wb, cfg: dict, today: datetime | None = None) -> list[dict]:
                 if try_add(item):
                     n_rip += 1
 
-    # ---- render finale dei segnaposto --------------------------------------
+    # ---- render finale dei segnaposto + firma canonica ---------------------
     today = today or datetime.now()
     for item in batch:
         item["oggetto"] = render_placeholders(item.get("oggetto", ""),
                                               item["nome"], item["azienda"], today)
-        item["corpo"] = render_placeholders(item.get("corpo", ""),
-                                            item["nome"], item["azienda"], today)
+        corpo = render_placeholders(item.get("corpo", ""),
+                                    item["nome"], item["azienda"], today)
+        item["corpo"] = ensure_signature(corpo)
     return batch
+
+
+def ensure_signature(corpo: str) -> str:
+    """Garantisce che OGNI bozza (A/B/C) termini con la firma canonica esatta
+    (email_matrix.SIGNATURE). La variante C la include già da build_email() →
+    non viene duplicata; A e B (da master/Template) la ricevono appesa."""
+    sig = email_matrix.SIGNATURE
+    if sig in (corpo or ""):
+        return corpo
+    return (corpo or "").rstrip() + "\n\n" + sig
 
 
 # --------------------------------------------------------------------------

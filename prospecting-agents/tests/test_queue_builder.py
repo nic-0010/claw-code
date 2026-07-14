@@ -174,6 +174,44 @@ def test_variante_c_ignora_colonne_rs_stale_del_master(tmp_path):
     assert "Detto ciò" not in corpo
 
 
+FIRMA_ATTESA = (
+    "Nicolò Porru\n"
+    "Wealth & Insurance Advisor — Generali Italia\n"
+    "Tel +39 331 454 8168 · LinkedIn: linkedin.com/in/nicolò-porru"
+)
+
+
+def test_ogni_eml_del_batch_contiene_la_firma(tmp_path):
+    """OGNI bozza generata (A, B e C — da master/Template o dalla matrice) deve
+    contenere ESATTAMENTE la firma canonica."""
+    from email import message_from_bytes
+
+    master = make_master(tmp_path)
+    batch = qb.select_batch(_load(master), CFG, today=TODAY)
+    out_dir = qb.write_outputs(batch, CFG, out_root=tmp_path / "bozze", today=TODAY)
+
+    varianti = {b.get("variante") for b in batch}
+    assert {"A", "B", "C"} <= varianti          # il batch copre tutte le varianti
+
+    emls = sorted(out_dir.glob("*.eml"))
+    assert len(emls) == len(batch)
+    for eml in emls:
+        payload = message_from_bytes(eml.read_bytes()).get_payload(decode=True).decode("utf-8")
+        assert FIRMA_ATTESA in payload, eml.name
+        assert "Wealth & Insurance Advisor" in payload
+        assert "+39 331 454 8168" in payload
+        assert "linkedin.com/in/nicolò-porru" in payload
+
+
+def test_firma_non_duplicata_sulla_variante_c(tmp_path):
+    """La C include già la firma da build_email(): non deve comparire due volte."""
+    master = make_master(tmp_path)
+    batch = qb.select_batch(_load(master), CFG, today=TODAY)
+    for b in batch:
+        if b.get("variante") == "C":
+            assert b["corpo"].count("Wealth & Insurance Advisor") == 1
+
+
 def test_eml_reale_contiene_nuova_apertura_c(tmp_path):
     """Confronta l'output REALE (.eml scritto su disco) col testo atteso —
     non lo snapshot. Guardia contro il disallineamento matrice↔mail reale."""

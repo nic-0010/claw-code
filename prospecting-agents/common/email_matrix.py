@@ -29,10 +29,9 @@ import unicodedata
 # Firma standard (mittente reale del sistema di prospecting)
 # ---------------------------------------------------------------------------
 SIGNATURE = (
-    "Un saluto,\n"
     "Nicolò Porru\n"
-    "Generali — Wealth & Employee Benefits\n"
-    "nicolo.porru@generali.com"
+    "Wealth & Insurance Advisor — Generali Italia\n"
+    "Tel +39 331 454 8168 · LinkedIn: linkedin.com/in/nicolò-porru"
 )
 
 # ---------------------------------------------------------------------------
@@ -247,12 +246,12 @@ _ANTI_OBJECTION = (
 
 _CTA = (
     "Le va di sentirci nei prossimi giorni? Le anticipo una sintesi di una "
-    "pagina, così arriva già con le idee chiare e senza perdere tempo."
+    "pagina."
 )
 
 _REFERRAL = (
     "Se invece pensa che il tema riguardi più un suo collega, mi indichi pure a "
-    "chi conviene rivolgermi: la ringrazio fin d'ora."
+    "chi conviene rivolgermi."
 )
 
 
@@ -286,18 +285,20 @@ def build_email(nome: str, azienda: str, ruolo: str) -> tuple[str, str, str]:
 
     opening = _role_cut(role) + _company_hook(company, ente)
     body_parts = [
-        f"Gentile {cognome},",
+        f"Buongiorno Dott./Dott.ssa {cognome},",
         opening,
         _fiscal_paragraph(role),
         _ANTI_OBJECTION,
         _CTA,
         _REFERRAL,
-        SIGNATURE,
     ]
     body = "\n\n".join(body_parts)
 
     subject = _apply_typography(subject)
     body = _apply_typography(body)
+    # La firma è appesa VERBATIM dopo la tipografia: deve restare identica
+    # (numero, LinkedIn, capitalizzazione) in ogni mail.
+    body = f"{body}\n\n{SIGNATURE}"
     tag = f"{company}·{role}"
     return subject, body, tag
 
