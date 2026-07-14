@@ -130,6 +130,71 @@ def test_variante_c_usa_matrice_v4(tmp_path):
         assert "⟦" not in b["corpo"]                     # niente segnaposto irrisolti
 
 
+# Nuova apertura attesa per il cluster ruolo C (deve comparire nelle mail REALI).
+NUOVA_APERTURA_C = (
+    "chi ricopre un ruolo come il suo le decisioni importanti le ha già prese"
+)
+VECCHIA_APERTURA_C = "tempo scarsissimo"   # testo stale, non deve MAI comparire
+
+
+def _master_con_rs_stale(tmp_path: Path) -> Path:
+    """Coda con 3 fredde di cluster C (Direttore Generale) e colonne R/S del
+    master già riempite con testo STALE. Con 3 fredde lo split è A/B/C su
+    indici 0/1/2: la terza riga è la variante C."""
+    wb = openpyxl.Workbook()
+    wb.active.title = "Registro invii"
+    wb["Registro invii"].append(["Data invio", "Email", "Ente/dominio", "Oggetto",
+                                 "Stato", "Azione consigliata", "Risposta associata",
+                                 "Preview risposta", "Gg lav da invio", "Variante"])
+    coda = wb.create_sheet("Coda invii dal 07-07")
+    coda.append(qb.CODA_HEADERS)
+    stale_body = ("Gentile [Cognome], chi ha una responsabilità di vertice come "
+                  "la sua ha, di solito, un tempo scarsissimo. Detto ciò, ...")
+    for i in range(1, 4):
+        coda.append([i, "", "Partecipata / grande ente", i, "", "",
+                     "GSE", f"Nome{i} Cognome{i}", "Direttore Generale",
+                     f"nome{i}.cognome{i}@gse.it", "valid", 95,
+                     "Oggetto coda", "PARTECIPATA·C", "Da inviare", "",
+                     "corpo A", "OGGETTO V4 STALE", stale_body])
+    path = tmp_path / "master_stale.xlsx"
+    wb.save(path)
+    return path
+
+
+def test_variante_c_ignora_colonne_rs_stale_del_master(tmp_path):
+    """REGRESSIONE: il builder NON deve usare le colonne R/S del master (che
+    possono essere stale). La C viene sempre rigenerata da build_email()."""
+    master = _master_con_rs_stale(tmp_path)
+    batch = qb.select_batch(_load(master), CFG, today=TODAY)
+    cs = [b for b in batch if b.get("variante") == "C"]
+    assert len(cs) == 1
+    corpo = cs[0]["corpo"]
+    assert NUOVA_APERTURA_C in corpo               # nuova apertura presente
+    assert VECCHIA_APERTURA_C not in corpo         # testo stale assente
+    assert "Detto ciò" not in corpo
+
+
+def test_eml_reale_contiene_nuova_apertura_c(tmp_path):
+    """Confronta l'output REALE (.eml scritto su disco) col testo atteso —
+    non lo snapshot. Guardia contro il disallineamento matrice↔mail reale."""
+    from email import message_from_bytes
+
+    master = _master_con_rs_stale(tmp_path)
+    batch = qb.select_batch(_load(master), CFG, today=TODAY)
+    out_dir = qb.write_outputs(batch, CFG, out_root=tmp_path / "bozze", today=TODAY)
+
+    c_items = [b for b in batch if b.get("variante") == "C"]
+    assert c_items
+    c_email = c_items[0]["email"].lower().replace("@", "_").replace(".", "_")
+    eml = next(p for p in out_dir.glob("*.eml") if c_email in p.name)
+
+    msg = message_from_bytes(eml.read_bytes())
+    payload = msg.get_payload(decode=True).decode("utf-8")
+    assert NUOVA_APERTURA_C in payload             # la mail reale ha il nuovo testo
+    assert VECCHIA_APERTURA_C not in payload
+    assert "protezione del patrimonio" in payload  # tema dell'apertura C
+
+
 def test_esclusione_registro_e_non_riscrivere(tmp_path):
     master = make_master(tmp_path, n_coda=3)
     wb = openpyxl.load_workbook(master)

@@ -285,15 +285,16 @@ def select_batch(wb, cfg: dict, today: datetime | None = None) -> list[dict]:
             item["oggetto"] = t["oggetto"] if t else item["oggetto_coda"]
             item["corpo"] = t["corpo"] if t else ""
             item["versione"] = "B"
-        else:  # C → Matrice V4 al volo
-            if item["corpo_v4"] and item["oggetto_v4"]:
-                item["oggetto"], item["corpo"] = item["oggetto_v4"], item["corpo_v4"]
-                tag = ""
-            else:
-                s, b, tag = email_matrix.build_email(
-                    item["nome"], item["azienda"], item["ruolo"])
-                item["oggetto"], item["corpo"] = s, b
-            item["versione"] = f"C ({tag})" if tag else "C (V4)"
+        else:  # C → Matrice V4 SEMPRE generata al volo (spec §B punto 1).
+            # NON si leggono le colonne R/S del master: possono essere stale
+            # (riempite una tantum da uno script vecchio o prima di una modifica
+            # alla matrice). build_email() è l'unica fonte di verità per la C,
+            # così ogni modifica agli hook si riflette sulle mail reali e gli
+            # snapshot restano il guardiano effettivo.
+            s, b, tag = email_matrix.build_email(
+                item["nome"], item["azienda"], item["ruolo"])
+            item["oggetto"], item["corpo"] = s, b
+            item["versione"] = f"C ({tag})"
 
     # ---- 2) follow-up + riprese -------------------------------------------
     if "Follow-up e riprese" in wb.sheetnames:
