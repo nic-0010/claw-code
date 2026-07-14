@@ -286,6 +286,71 @@ def test_simulazione_svuotamento_genera_coda_v4(tmp_path):
 
 
 # --------------------------------------------------------------------------
+# Catena completa dell'auto-rifornimento: coda → lead_refill automatico
+# --------------------------------------------------------------------------
+def _make_archive(tmp_path: Path, n: int = 80) -> Path:
+    arch = openpyxl.Workbook()
+    ws = arch.active
+    ws.append(["Nome", "Azienda", "Ruolo", "Email", "Verification", "Segmento"])
+    for i in range(1, n + 1):
+        ws.append([f"Arch{i} Lead{i}", f"ArchEnte{i}", "Manager",
+                   f"arch{i}.lead{i}@archente{i}.it", "valid", "PA"])
+    p = tmp_path / "archivio.xlsx"
+    arch.save(p)
+    return p
+
+
+def test_ensure_lead_stock_sotto_soglia_importa(tmp_path):
+    """Spec §B punto 2: Nuovi contatti sotto soglia → lead_refill automatico."""
+    master = make_master(tmp_path, n_nuovi=5)      # 5 valid < soglia 60
+    cfg = {**CFG, "lead_archive": str(_make_archive(tmp_path))}
+    res = qb.ensure_lead_stock(master, cfg, apply=True)
+    assert res["triggered"] is True
+    assert res["appended"] > 0
+    assert res["n_valid"] >= 5 + res["appended"] - 1   # scorte risalite
+    wb = openpyxl.load_workbook(master)
+    nc = wb["Nuovi contatti"]
+    assert "arch" in str(nc.cell(nc.max_row, 10).value)
+
+
+def test_ensure_lead_stock_sopra_soglia_non_importa(tmp_path):
+    master = make_master(tmp_path, n_nuovi=10)
+    cfg = {**CFG, "soglia_scorta": 5,
+           "lead_archive": str(_make_archive(tmp_path))}
+    res = qb.ensure_lead_stock(master, cfg, apply=True)
+    assert res["triggered"] is False
+
+
+def test_ensure_lead_stock_senza_archivio_warning(tmp_path):
+    master = make_master(tmp_path, n_nuovi=5)
+    cfg = {**CFG, "lead_archive": str(tmp_path / "inesistente.xlsx")}
+    res = qb.ensure_lead_stock(master, cfg, apply=True)
+    assert res["triggered"] is False
+    assert "archivio" in res["warning"]
+
+
+def test_ensure_lead_stock_dry_run_non_scrive(tmp_path):
+    master = make_master(tmp_path, n_nuovi=5)
+    cfg = {**CFG, "lead_archive": str(_make_archive(tmp_path))}
+    before = master.read_bytes()
+    res = qb.ensure_lead_stock(master, cfg, apply=False)
+    assert res["triggered"] is True
+    assert master.read_bytes() == before
+
+
+def test_catena_completa_svuotamento_coda_e_archivio(tmp_path):
+    """Mai a secco: coda vuota → refill coda con V4; scorte esaurite dopo
+    l'accodamento → lead_refill dall'archivio. Due stadi in un solo run."""
+    master = make_master(tmp_path, n_coda=0, n_nuovi=15)
+    cfg = {**CFG, "lead_archive": str(_make_archive(tmp_path, n=100))}
+    res1 = qb.refill_queue(master, cfg, apply=True, today=TODAY)
+    assert res1["created"] and res1["n"] == 15     # tutti accodati → scorte a 0
+    res2 = qb.ensure_lead_stock(master, cfg, apply=True)
+    assert res2["triggered"] is True
+    assert res2["n_valid"] >= cfg["soglia_scorta"]  # scorte ricostituite
+
+
+# --------------------------------------------------------------------------
 # Lead refill dall'archivio
 # --------------------------------------------------------------------------
 def test_lead_refill_dedupe_e_append(tmp_path):

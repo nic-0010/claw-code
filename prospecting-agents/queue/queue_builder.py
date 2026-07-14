@@ -459,6 +459,33 @@ def autonomy_days(n_valid: int, per_day: int = 12) -> float:
     return round(n_valid / per_day, 1) if per_day else 0.0
 
 
+def ensure_lead_stock(master_path: str | Path, cfg: dict, *, apply: bool) -> dict:
+    """Secondo stadio dell'auto-rifornimento (spec §B punto 2): se anche i
+    `Nuovi contatti` non accodati sono sotto soglia, importa dall'archivio lead
+    via lead_refill (Regole scoring, dedupe totale, append-only + backup).
+
+    Ritorna {triggered, n_valid, appended?, warning?}.
+    """
+    from common import io_master as io
+    from queue import lead_refill as lr
+
+    soglia = cfg.get("soglia_scorta", 60)
+    n = count_valid_not_queued(io.load(master_path))
+    if n >= soglia:
+        return {"triggered": False, "n_valid": n}
+
+    archive = cfg.get("lead_archive")
+    if not archive or not Path(archive).exists():
+        return {"triggered": False, "n_valid": n,
+                "warning": "scorte sotto soglia ma archivio lead non configurato "
+                           "o non trovato (config: lead_archive)"}
+
+    top_n = cfg.get("refill_top_n", max(soglia * 2, 100))
+    rep = lr.refill(master_path, archive, cfg, apply=apply, top_n=top_n)
+    n_after = count_valid_not_queued(io.load(master_path)) if apply else n
+    return {"triggered": True, "n_valid": n_after, "appended": rep["appended"]}
+
+
 # --------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------
@@ -482,10 +509,12 @@ def main(argv: list[str] | None = None) -> int:
     batch = select_batch(wb, cfg)
     out_dir = write_outputs(batch, cfg)
 
-    # auto-rifornimento (uniche scritture ammesse)
+    # auto-rifornimento (uniche scritture ammesse): 1) nuova coda con V4,
+    # 2) se anche Nuovi contatti è sotto soglia, lead_refill dall'archivio.
     refill = refill_queue(master, cfg, apply=args.apply)
     refill["log"].save(cfg.get("paths", {}).get("logs", "logs"))
-    n_valid = refill["n_valid"]
+    stock = ensure_lead_stock(master, cfg, apply=args.apply)
+    n_valid = stock["n_valid"]
 
     by_var = Counter(i.get("variante", "?") for i in batch)
     print(f"Batch: {len(batch)} bozze in {out_dir} "
@@ -493,6 +522,11 @@ def main(argv: list[str] | None = None) -> int:
     if refill.get("created"):
         print(f"Refill: creato {refill['sheet']!r} con {refill['n']} contatti (V4 pronte)"
               + ("" if args.apply else " [DRY-RUN, non salvato]"))
+    if stock.get("triggered"):
+        print(f"Lead refill: {stock['appended']} lead importati dall'archivio"
+              + ("" if args.apply else " [DRY-RUN]"))
+    if stock.get("warning"):
+        print(f"ATTENZIONE: {stock['warning']}")
     print(f"Autonomia residua: scorte lead ~{autonomy_days(n_valid)} giorni al ritmo attuale")
 
     if args.outlook_drafts:
