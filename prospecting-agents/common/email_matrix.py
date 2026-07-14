@@ -209,10 +209,15 @@ def _company_hook(key: str, ente: str) -> str:
 def _role_cut(cluster: str) -> str:
     """Taglio-ruolo che precede l'aggancio società per C e STAFF."""
     if cluster == "C":
+        # apertura C: prosegue in minuscolo dopo "Gentile {Cognome}," (stile
+        # epistolare italiano); l'hook società segue con la sua maiuscola.
         return (
-            "Le scrivo direttamente perché, per una posizione come la sua, il "
-            "tema si gioca su cifre che vale la pena vedere una volta con "
-            "attenzione. "
+            "chi ricopre un ruolo come il suo le decisioni importanti le ha "
+            "già prese, e di solito bene. Le scrivo proprio per questo: dal "
+            "2026 è cambiato un elemento che, per un profilo come il suo, "
+            "tocca due aspetti che di solito pesano più della previdenza in "
+            "sé — la protezione del patrimonio e la pianificazione del "
+            "passaggio. "
         )
     if cluster == "STAFF":
         return (
