@@ -2,7 +2,7 @@ TAG: SICUREZZA·DIR
 INPUT: nome='Luca Bianchi' azienda='Comando Vigili del Fuoco di Roma' ruolo='Deputy Director'
 SUBJECT: Previdenza e tutele nel comparto sicurezza
 ---
-Buongiorno Dott./Dott.ssa Bianchi,
+Buongiorno Dott. Bianchi,
 
 Chi opera nel comparto sicurezza porta un rischio professionale che le coperture standard raramente riconoscono, e le tutele di comparto lasciano scoperta la posizione personale.
 

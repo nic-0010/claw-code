@@ -80,7 +80,7 @@ def test_build_email_firma_e_tag():
     subject, body, tag = em.build_email("Marina Sacco", "GSE", "Director General")
     assert tag == "PARTECIPATA·C"
     assert isinstance(subject, str) and isinstance(body, str)
-    assert body.startswith("Buongiorno Dott./Dott.ssa Sacco,")
+    assert body.startswith("Buongiorno Dott.ssa Sacco,")   # Marina → femminile
 
 
 # Firma canonica esatta richiesta su OGNI mail (tutte le varianti/cluster).
@@ -104,6 +104,61 @@ def test_firma_esatta_su_tutte_le_24_combinazioni():
             # niente residui della vecchia firma
             assert "Employee Benefits" not in body
             assert "Un saluto," not in body
+
+
+def test_saluto_maschile():
+    _, body, _ = em.build_email("Marco Rossi", "Regione Lazio", "Dirigente",
+                                email="marco.rossi@regione.lazio.it")
+    assert body.startswith("Buongiorno Dott. Rossi,")
+
+
+def test_saluto_femminile():
+    _, body, _ = em.build_email("Giulia Bianchi", "GSE", "Manager",
+                                email="giulia.bianchi@gse.it")
+    assert body.startswith("Buongiorno Dott.ssa Bianchi,")
+
+
+def test_saluto_ambiguo_maschile_dominio_italiano():
+    # Andrea su dominio .it → maschile
+    _, body, _ = em.build_email("Andrea Colombo", "Comune di Roma", "Funzionario",
+                                email="andrea.colombo@comune.roma.it")
+    assert body.startswith("Buongiorno Dott. Colombo,")
+    # anche senza email → default italiano → maschile
+    _, body2, _ = em.build_email("Andrea Colombo", "Comune di Roma", "Funzionario")
+    assert body2.startswith("Buongiorno Dott. Colombo,")
+
+
+def test_saluto_ambiguo_dominio_estero_neutro():
+    # Andrea su dominio estero → fallback neutro senza titolo
+    _, body, _ = em.build_email("Andrea Von Rauch", "GIZ", "Advisor",
+                                email="andrea.von.rauch@giz.de")
+    assert body.startswith("Buongiorno Andrea Von Rauch,")
+    assert "Dott." not in body.split("\n")[0]
+    # altro ambiguo su dominio internazionale
+    _, body2, _ = em.build_email("Simone Dupont", "WFP", "Officer",
+                                 email="simone.dupont@wfp.org")
+    assert body2.startswith("Buongiorno Simone Dupont,")
+
+
+def test_saluto_nome_straniero_neutro():
+    # nome non italiano → mai titolo, indipendentemente dal dominio
+    _, body, _ = em.build_email("Esther Law", "FAO", "Analyst",
+                                email="esther.law@fao.org")
+    assert body.startswith("Buongiorno Esther Law,")
+    assert "Dott." not in body.split("\n")[0]
+
+
+def test_gender_helper():
+    assert em.gender("Marco Rossi") == "M"
+    assert em.gender("Giulia Bianchi") == "F"
+    assert em.gender("Andrea Rossi", "a@x.it") == "M"
+    assert em.gender("Andrea Rossi", "a@giz.de") is None
+    assert em.gender("Andrea Rossi") == "M"            # dominio assente → italiano
+    assert em.gender("Esther Law", "a@fao.org") is None
+    # ambigui maschili elencati dalla spec
+    for n in ("Andrea", "Simone", "Nicola", "Daniele", "Gabriele",
+              "Michele", "Luca", "Mattia", "Elia"):
+        assert em.gender(n, "x@ente.it") == "M", n
 
 
 def test_corpo_c_senza_frasi_non_approvate():

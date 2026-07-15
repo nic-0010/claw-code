@@ -2,7 +2,7 @@ TAG: ORGINT·DIR
 INPUT: nome='Luca Bianchi' azienda='Ministero degli Affari Esteri e della Cooperazione Internazionale' ruolo='Deputy Director'
 SUBJECT: La sua posizione previdenziale italiana (MAECI)
 ---
-Buongiorno Dott./Dott.ssa Bianchi,
+Buongiorno Dott. Bianchi,
 
 Chi lavora in MAECI ha in genere la posizione previdenziale italiana sospesa: i contributi maturano fuori dal circuito INPS e il montante che si costruirà in Italia va ricostruito a mano.
 

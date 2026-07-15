@@ -2,7 +2,7 @@ TAG: BANCA·STAFF
 INPUT: nome='Paolo Verdi' azienda='Monte dei Paschi di Siena' ruolo='Analyst'
 SUBJECT: Un secondo parere sulla sua posizione previdenziale (MPS)
 ---
-Buongiorno Dott./Dott.ssa Verdi,
+Buongiorno Dott. Verdi,
 
 Le scrivo perché è proprio sulle posizioni operative che i piccoli aggiustamenti fatti per tempo pesano di più nel lungo periodo. In MPS il tema previdenziale lo padroneggia già; il punto è più tecnico: saturare il plafond di deducibilità che oggi resta quasi sempre inutilizzato.
 

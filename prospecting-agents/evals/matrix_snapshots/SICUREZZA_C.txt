@@ -2,7 +2,7 @@ TAG: SICUREZZA·C
 INPUT: nome='Marina Sacco' azienda='Comando Vigili del Fuoco di Roma' ruolo='Director General'
 SUBJECT: Previdenza e tutele nel comparto sicurezza
 ---
-Buongiorno Dott./Dott.ssa Sacco,
+Buongiorno Dott.ssa Sacco,
 
 chi ricopre un ruolo come il suo le decisioni importanti le ha già prese, e di solito bene. Le scrivo proprio per questo: dal 2026 è cambiato un elemento che, per un profilo come il suo, tocca due aspetti che di solito pesano più della previdenza in sé — la protezione del patrimonio e la pianificazione del passaggio. Chi opera nel comparto sicurezza porta un rischio professionale che le coperture standard raramente riconoscono, e le tutele di comparto lasciano scoperta la posizione personale.
 

@@ -2,7 +2,7 @@ TAG: BANCA·QUAD
 INPUT: nome='Elena Rossi' azienda='Monte dei Paschi di Siena' ruolo='Responsabile Amministrazione'
 SUBJECT: Un secondo parere sulla sua posizione previdenziale (MPS)
 ---
-Buongiorno Dott./Dott.ssa Rossi,
+Buongiorno Dott.ssa Rossi,
 
 In MPS il tema previdenziale lo padroneggia già; il punto è più tecnico: saturare il plafond di deducibilità che oggi resta quasi sempre inutilizzato.
 

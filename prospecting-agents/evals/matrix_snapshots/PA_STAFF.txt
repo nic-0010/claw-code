@@ -2,7 +2,7 @@ TAG: PA·STAFF
 INPUT: nome='Paolo Verdi' azienda='Regione Lazio' ruolo='Analyst'
 SUBJECT: Un secondo parere sulla sua posizione previdenziale (Regione)
 ---
-Buongiorno Dott./Dott.ssa Verdi,
+Buongiorno Dott. Verdi,
 
 Le scrivo perché è proprio sulle posizioni operative che i piccoli aggiustamenti fatti per tempo pesano di più nel lungo periodo. Dopo le ultime riforme, in enti come Regione il gap contributivo tra ultimo stipendio e prima pensione si è allargato più di quanto le stime interne lascino intendere.
 

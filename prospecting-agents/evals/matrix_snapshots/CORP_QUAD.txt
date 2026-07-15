@@ -2,7 +2,7 @@ TAG: CORP·QUAD
 INPUT: nome='Elena Rossi' azienda='Fendi S.p.A.' ruolo='Responsabile Amministrazione'
 SUBJECT: Un secondo parere sulla sua posizione previdenziale (Fendi)
 ---
-Buongiorno Dott./Dott.ssa Rossi,
+Buongiorno Dott.ssa Rossi,
 
 In una realtà come Fendi la priorità è duplice: proteggere il reddito nella fase attiva e preparare per tempo il passaggio generazionale del patrimonio.
 

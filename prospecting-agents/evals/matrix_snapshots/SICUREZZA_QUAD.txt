@@ -2,7 +2,7 @@ TAG: SICUREZZA·QUAD
 INPUT: nome='Elena Rossi' azienda='Comando Vigili del Fuoco di Roma' ruolo='Responsabile Amministrazione'
 SUBJECT: Previdenza e tutele nel comparto sicurezza
 ---
-Buongiorno Dott./Dott.ssa Rossi,
+Buongiorno Dott.ssa Rossi,
 
 Chi opera nel comparto sicurezza porta un rischio professionale che le coperture standard raramente riconoscono, e le tutele di comparto lasciano scoperta la posizione personale.
 
