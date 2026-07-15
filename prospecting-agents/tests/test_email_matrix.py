@@ -66,11 +66,74 @@ def test_company_key(azienda, expected):
     assert em.company_key(azienda) == expected
 
 
+@pytest.mark.parametrize(
+    "azienda,email,expected",
+    [
+        # dominio autoritativo (nome ente troncato/tradotto o assente)
+        ("Deutsche Gesellschaft für Internationale Zusammenarbeit",
+         "andrea.von.rauch@giz.de", "ORGINT"),
+        ("", "x@wfp.org", "ORGINT"),
+        ("", "y@ifad.org", "ORGINT"),
+        ("Ministero degli Affari Esteri", "z@esteri.it", "ORGINT"),
+        ("Comando Provinciale", "k@vigilfuoco.it", "SICUREZZA"),
+        ("", "a@gse.it", "PARTECIPATA"),
+        # dominio estero sconosciuto → mai PA italiana → ORGINT
+        ("Agenzia Sconosciuta", "p@example.de", "ORGINT"),
+        # dominio .it sconosciuto senza match nome → PA
+        ("Ente Ignoto", "q@ente-ignoto.it", "PA"),
+    ],
+)
+def test_company_key_da_dominio(azienda, email, expected):
+    assert em.company_key(azienda, email) == expected
+
+
+def test_giz_non_e_pa_end_to_end():
+    """Bug grave: GIZ (agenzia tedesca) non deve finire in PA con testo su
+    riforme pensionistiche italiane."""
+    subject, body, tag = em.build_email(
+        "Andrea Von Rauch",
+        "Deutsche Gesellschaft für Internationale Zusammenarbeit",
+        "Advisor", email="andrea.von.rauch@giz.de")
+    assert tag.startswith("ORGINT·")
+    assert "(GIZ)" in subject
+    assert "Deutsche" not in subject            # niente troncamento "(Deutsche)"
+    assert "riforme" not in body.lower() or "gap contributivo" not in body.lower()
+
+
+def test_ente_short_giz_e_none_per_lunghi():
+    assert em.ente_short("Deutsche Gesellschaft für Internationale Zusammenarbeit") == "GIZ"
+    # nome lungo e sconosciuto → None (l'oggetto omette la parentesi)
+    assert em.ente_short("Agenzia Regionale per la Protezione Ambientale del Lazio") is None
+    # nome corto → tenuto intero, non troncato
+    assert em.ente_short("Regione Lazio") == "Regione Lazio"
+
+
+def test_oggetto_senza_parentesi_se_ente_ignoto():
+    subject, _, _ = em.build_email(
+        "Mario Rossi", "Agenzia Regionale per la Protezione Ambientale del Lazio",
+        "Manager", email="mario.rossi@arpa.lazio.it")
+    assert "(" not in subject                   # nessuna parentesi troncata
+
+
+@pytest.mark.parametrize(
+    "nome,expected",
+    [
+        ("Andrea Von Rauch", "Von Rauch"),
+        ("Maria De Rossi", "De Rossi"),
+        ("Anna Della Valle", "Della Valle"),
+        ("Marina Sacco", "Sacco"),              # nessuna particella
+        ("Paolo", "Paolo"),
+    ],
+)
+def test_cognome_con_particella(nome, expected):
+    assert em._cognome(nome) == expected
+
+
 def test_ente_short_normalizza_nomi_lunghi():
     assert em.ente_short("Ministero degli Affari Esteri") == "MAECI"
     assert em.ente_short("Monte dei Paschi di Siena") == "MPS"
     assert em.ente_short("GSE") == "GSE"
-    assert em.ente_short("") == "il suo ente"
+    assert em.ente_short("") is None
 
 
 # --------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 TAG: PA·STAFF
 INPUT: nome='Paolo Verdi' azienda='Regione Lazio' ruolo='Analyst'
-SUBJECT: Un secondo parere sulla sua posizione previdenziale (Regione)
+SUBJECT: Un secondo parere sulla sua posizione previdenziale (Regione Lazio)
 ---
 Buongiorno Dott. Verdi,
 
-Le scrivo perché è proprio sulle posizioni operative che i piccoli aggiustamenti fatti per tempo pesano di più nel lungo periodo. Dopo le ultime riforme, in enti come Regione il gap contributivo tra ultimo stipendio e prima pensione si è allargato più di quanto le stime interne lascino intendere.
+Le scrivo perché è proprio sulle posizioni operative che i piccoli aggiustamenti fatti per tempo pesano di più nel lungo periodo. Dopo le ultime riforme, in un ente come Regione Lazio il gap contributivo tra ultimo stipendio e prima pensione si è allargato più di quanto le stime interne lascino intendere.
 
 Un dato concreto: con un’aliquota marginale intorno al 23%, ogni euro versato sulla previdenza integrativa oggi deducibile — fino a circa 1.220 euro di risparmio d’imposta l’anno sul massimale — le torna indietro come minor tassazione. È il modo più efficiente di mettere da parte, e in pochi lo sfruttano davvero.
 
