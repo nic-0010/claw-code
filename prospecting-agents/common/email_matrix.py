@@ -271,21 +271,25 @@ def _subject(company: str, role: str, ente: str) -> str:
 # ---------------------------------------------------------------------------
 # API pubblica
 # ---------------------------------------------------------------------------
-def build_email(nome: str, azienda: str, ruolo: str) -> tuple[str, str, str]:
+def build_email(nome: str, azienda: str, ruolo: str,
+                email: str | None = None) -> tuple[str, str, str]:
     """Genera (subject, body, tag) per un lead.
 
     tag == "{company_key}·{role_cluster}"
+
+    `email` (opzionale) serve solo al saluto: per i nomi ambigui (Andrea,
+    Nicola…) il titolo maschile vale su dominio italiano; su dominio estero si
+    usa il fallback neutro senza titolo.
     """
     company = company_key(azienda)
     role = role_cluster(ruolo)
     ente = ente_short(azienda)
-    cognome = _cognome(nome)
 
     subject = _subject(company, role, ente)
 
     opening = _role_cut(role) + _company_hook(company, ente)
     body_parts = [
-        f"Buongiorno Dott./Dott.ssa {cognome},",
+        _greeting(nome, email),
         opening,
         _fiscal_paragraph(role),
         _ANTI_OBJECTION,
@@ -320,6 +324,108 @@ def _cognome(nome: str | None) -> str:
     if not nome or not nome.strip():
         return "Dottore"
     return nome.strip().split()[-1]
+
+
+# ---------------------------------------------------------------------------
+# Genere dal nome di battesimo (per il saluto)
+# ---------------------------------------------------------------------------
+# Nomi italiani MASCHILI ma ambigui fuori dall'Italia (Andrea/Nicola femminili
+# altrove, Simone femminile in FR/DE, ecc.): maschili SOLO su dominio .it;
+# su dominio estero → fallback neutro senza titolo.
+_AMBIGUOUS_MALE = {
+    "andrea", "simone", "nicola", "daniele", "gabriele", "michele",
+    "luca", "mattia", "elia", "emanuele", "raffaele",
+}
+
+# Maschili non ambigui (lista di nomi comuni, normalizzati senza accenti).
+_MALE = {
+    "alessandro", "alessio", "alberto", "aldo", "alfredo", "angelo", "antonio",
+    "arturo", "bruno", "carlo", "carmine", "cesare", "ciro", "claudio",
+    "corrado", "cristian", "cristiano", "dario", "davide", "diego", "domenico",
+    "edoardo", "emilio", "enrico", "enzo", "ettore", "fabio", "fabrizio",
+    "federico", "ferdinando", "filippo", "flavio", "francesco", "franco",
+    "gaetano", "giacomo", "gianluca", "gianmarco", "gianni", "gino", "giordano",
+    "giorgio", "giovanni", "giuliano", "giulio", "giuseppe", "graziano",
+    "gregorio", "guido", "ignazio", "jacopo", "leonardo", "lorenzo", "luciano",
+    "ludovico", "luigi", "manuel", "marco", "mariano", "mario", "massimiliano",
+    "massimo", "matteo", "maurizio", "mauro", "mirko", "nino", "oreste",
+    "orlando", "osvaldo", "ottavio", "paolo", "pasquale", "patrizio", "piero",
+    "pietro", "renato", "renzo", "riccardo", "roberto", "rocco", "rodolfo",
+    "ruggero", "salvatore", "samuele", "sandro", "sergio", "silvio", "stefano",
+    "tommaso", "ubaldo", "umberto", "valerio", "vincenzo", "vito", "vittorio",
+    "walter",
+}
+
+# Femminili comuni (inclusi quelli in -e come Beatrice, Irene, Agnese).
+_FEMALE = {
+    "adele", "adriana", "agnese", "alba", "alessandra", "alessia", "alice",
+    "ambra", "angela", "anna", "annamaria", "antonella", "arianna", "assunta",
+    "aurora", "barbara", "beatrice", "benedetta", "bianca", "bruna", "camilla",
+    "carla", "carlotta", "carmela", "caterina", "cecilia", "chiara", "clara",
+    "claudia", "cristina", "daniela", "debora", "diana", "donatella", "elena",
+    "eleonora", "elisa", "elisabetta", "emanuela", "emma", "enrica", "erica",
+    "eugenia", "federica", "fernanda", "fiorella", "flavia", "franca",
+    "francesca", "gabriella", "gaia", "gemma", "giada", "gianna", "ginevra",
+    "gioia", "giorgia", "giovanna", "giulia", "giuliana", "giuseppina",
+    "grazia", "ilaria", "irene", "isabella", "katia", "laura", "letizia",
+    "lidia", "liliana", "lina", "linda", "lisa", "livia", "loredana", "lorena",
+    "lucia", "luciana", "ludovica", "luisa", "maddalena", "manuela", "mara",
+    "marcella", "margherita", "maria", "mariangela", "marina", "marta",
+    "martina", "matilde", "melania", "michela", "milena", "mirella", "monica",
+    "nadia", "natalia", "nicoletta", "noemi", "ornella", "paola", "patrizia",
+    "piera", "raffaella", "rachele", "rebecca", "renata", "rita", "roberta",
+    "romina", "rosa", "rosanna", "rossana", "rossella", "sabrina", "samantha",
+    "sandra", "sara", "serena", "silvana", "silvia", "simona", "sofia", "sonia",
+    "stefania", "susanna", "teresa", "tiziana", "valentina", "valeria",
+    "vanessa", "vera", "veronica", "vittoria", "viviana",
+}
+
+
+def _first_name(nome: str | None) -> str:
+    """Nome di battesimo = prima parola del campo Nome, normalizzata."""
+    if not nome or not nome.strip():
+        return ""
+    return _norm(nome.strip().split()[0])
+
+
+def _is_italian_domain(email: str | None) -> bool | None:
+    """True se il dominio email è .it, False se estero, None se assente/ignoto."""
+    e = (email or "").strip().lower()
+    if "@" not in e:
+        return None
+    dom = e.split("@")[-1]
+    if not dom or "." not in dom:
+        return None
+    return dom.endswith(".it")
+
+
+def gender(nome: str | None, email: str | None = None) -> str | None:
+    """Deduce il genere dal nome di battesimo: 'M', 'F' o None (ignoto/straniero).
+
+    I nomi ambigui (Andrea, Nicola…) sono maschili solo se il dominio è italiano
+    o assente; su dominio estero → None (fallback neutro)."""
+    first = _first_name(nome)
+    if not first:
+        return None
+    if first in _AMBIGUOUS_MALE:
+        return "M" if _is_italian_domain(email) in (True, None) else None
+    if first in _MALE:
+        return "M"
+    if first in _FEMALE:
+        return "F"
+    return None
+
+
+def _greeting(nome: str | None, email: str | None = None) -> str:
+    """Saluto con genere: 'Buongiorno Dott. Rossi,' / 'Buongiorno Dott.ssa Rossi,'
+    oppure, per nomi stranieri/ignoti, 'Buongiorno Nome Cognome,' senza titolo."""
+    g = gender(nome, email)
+    if g == "M":
+        return f"Buongiorno Dott. {_cognome(nome)},"
+    if g == "F":
+        return f"Buongiorno Dott.ssa {_cognome(nome)},"
+    full = (nome or "").strip()
+    return f"Buongiorno {full}," if full else "Buongiorno,"
 
 
 _STRAIGHT_APOS = "'"

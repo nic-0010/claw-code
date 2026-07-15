@@ -2,7 +2,7 @@ TAG: BANCA·DIR
 INPUT: nome='Luca Bianchi' azienda='Monte dei Paschi di Siena' ruolo='Deputy Director'
 SUBJECT: 2.280 euro l’anno, dal 2026
 ---
-Buongiorno Dott./Dott.ssa Bianchi,
+Buongiorno Dott. Bianchi,
 
 In MPS il tema previdenziale lo padroneggia già; il punto è più tecnico: saturare il plafond di deducibilità che oggi resta quasi sempre inutilizzato.
 

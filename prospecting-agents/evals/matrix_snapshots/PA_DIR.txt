@@ -2,7 +2,7 @@ TAG: PA·DIR
 INPUT: nome='Luca Bianchi' azienda='Regione Lazio' ruolo='Deputy Director'
 SUBJECT: Un secondo parere sulla sua posizione previdenziale (Regione)
 ---
-Buongiorno Dott./Dott.ssa Bianchi,
+Buongiorno Dott. Bianchi,
 
 Dopo le ultime riforme, in enti come Regione il gap contributivo tra ultimo stipendio e prima pensione si è allargato più di quanto le stime interne lascino intendere.
 

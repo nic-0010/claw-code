@@ -2,7 +2,7 @@ TAG: ORGINT·QUAD
 INPUT: nome='Elena Rossi' azienda='Ministero degli Affari Esteri e della Cooperazione Internazionale' ruolo='Responsabile Amministrazione'
 SUBJECT: La sua posizione previdenziale italiana (MAECI)
 ---
-Buongiorno Dott./Dott.ssa Rossi,
+Buongiorno Dott.ssa Rossi,
 
 Chi lavora in MAECI ha in genere la posizione previdenziale italiana sospesa: i contributi maturano fuori dal circuito INPS e il montante che si costruirà in Italia va ricostruito a mano.
 

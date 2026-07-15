@@ -2,7 +2,7 @@ TAG: PARTECIPATA·DIR
 INPUT: nome='Luca Bianchi' azienda='GSE' ruolo='Deputy Director'
 SUBJECT: Un secondo parere sulla sua posizione previdenziale (GSE)
 ---
-Buongiorno Dott./Dott.ssa Bianchi,
+Buongiorno Dott. Bianchi,
 
 In enti come GSE il welfare aziendale è di buon livello, ma le coperture personali restano spesso ferme a quello che si è sottoscritto anni fa.
 

@@ -292,7 +292,8 @@ def select_batch(wb, cfg: dict, today: datetime | None = None) -> list[dict]:
             # così ogni modifica agli hook si riflette sulle mail reali e gli
             # snapshot restano il guardiano effettivo.
             s, b, tag = email_matrix.build_email(
-                item["nome"], item["azienda"], item["ruolo"])
+                item["nome"], item["azienda"], item["ruolo"],
+                email=item.get("email"))
             item["oggetto"], item["corpo"] = s, b
             item["versione"] = f"C ({tag})"
 
@@ -450,7 +451,8 @@ def refill_queue(master_path: str | Path, cfg: dict, *, apply: bool,
     nc = wb["Nuovi contatti"]
     for i, r in enumerate(rows[:n_take], start=1):
         nome, azienda, ruolo = r.get("Nome") or "", r.get("Azienda") or "", r.get("Ruolo") or ""
-        s_v4, b_v4, tag = email_matrix.build_email(nome, azienda, ruolo)
+        s_v4, b_v4, tag = email_matrix.build_email(nome, azienda, ruolo,
+                                                   email=r.get("Email"))
         ws.append([
             i, "", r.get("Segmento") or "", i, "", "",
             azienda, nome, ruolo, r.get("Email") or "",

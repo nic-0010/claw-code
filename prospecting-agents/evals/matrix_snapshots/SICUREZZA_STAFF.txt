@@ -2,7 +2,7 @@ TAG: SICUREZZA·STAFF
 INPUT: nome='Paolo Verdi' azienda='Comando Vigili del Fuoco di Roma' ruolo='Analyst'
 SUBJECT: Previdenza e tutele nel comparto sicurezza
 ---
-Buongiorno Dott./Dott.ssa Verdi,
+Buongiorno Dott. Verdi,
 
 Le scrivo perché è proprio sulle posizioni operative che i piccoli aggiustamenti fatti per tempo pesano di più nel lungo periodo. Chi opera nel comparto sicurezza porta un rischio professionale che le coperture standard raramente riconoscono, e le tutele di comparto lasciano scoperta la posizione personale.
 

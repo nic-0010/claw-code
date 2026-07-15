@@ -2,7 +2,7 @@ TAG: CORP·STAFF
 INPUT: nome='Paolo Verdi' azienda='Fendi S.p.A.' ruolo='Analyst'
 SUBJECT: Un secondo parere sulla sua posizione previdenziale (Fendi)
 ---
-Buongiorno Dott./Dott.ssa Verdi,
+Buongiorno Dott. Verdi,
 
 Le scrivo perché è proprio sulle posizioni operative che i piccoli aggiustamenti fatti per tempo pesano di più nel lungo periodo. In una realtà come Fendi la priorità è duplice: proteggere il reddito nella fase attiva e preparare per tempo il passaggio generazionale del patrimonio.
 

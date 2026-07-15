@@ -2,7 +2,7 @@ TAG: PARTECIPATA·STAFF
 INPUT: nome='Paolo Verdi' azienda='GSE' ruolo='Analyst'
 SUBJECT: Un secondo parere sulla sua posizione previdenziale (GSE)
 ---
-Buongiorno Dott./Dott.ssa Verdi,
+Buongiorno Dott. Verdi,
 
 Le scrivo perché è proprio sulle posizioni operative che i piccoli aggiustamenti fatti per tempo pesano di più nel lungo periodo. In enti come GSE il welfare aziendale è di buon livello, ma le coperture personali restano spesso ferme a quello che si è sottoscritto anni fa.
 
