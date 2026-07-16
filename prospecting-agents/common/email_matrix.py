@@ -99,6 +99,8 @@ _COMPANY_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
         "maeci", "esteri", "affari esteri", "ministry of foreign",
         "wfp", "world food", "fao", "ifad", "giz", "idlo", "unido",
         "united nations", "nazioni unite", "unicef", "unhcr", "iom", "oim",
+        "deutsche gesellschaft", "internationale zusammenarbeit",
+        "zusammenarbeit", "cooperazione internazionale",
     )),
     ("BANCA", (
         "mps", "monte dei paschi", "intesa", "sanpaolo", "unicredit",
@@ -117,14 +119,52 @@ _COMPANY_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 
-def company_key(azienda: str) -> str:
+# Domini email → classe società. Il dominio è più affidabile del nome ente
+# (spesso troncato/tradotto): un dominio noto vince sul matching per nome.
+_DOMAIN_KEY: dict[str, str] = {
+    # ORGINT — organizzazioni internazionali / estero
+    "giz.de": "ORGINT", "wfp.org": "ORGINT", "fao.org": "ORGINT",
+    "ifad.org": "ORGINT", "idlo.int": "ORGINT", "unido.org": "ORGINT",
+    "esteri.it": "ORGINT", "maeci.it": "ORGINT", "un.org": "ORGINT",
+    "unicef.org": "ORGINT", "unhcr.org": "ORGINT",
+    # SICUREZZA
+    "vigilfuoco.it": "SICUREZZA", "carabinieri.it": "SICUREZZA",
+    "gdf.gov.it": "SICUREZZA", "poliziadistato.it": "SICUREZZA",
+    # PARTECIPATA
+    "gse.it": "PARTECIPATA", "sace.it": "PARTECIPATA", "sogei.it": "PARTECIPATA",
+    "rai.it": "PARTECIPATA", "enit.it": "PARTECIPATA", "astral.it": "PARTECIPATA",
+    # BANCA
+    "mps.it": "BANCA", "intesasanpaolo.com": "BANCA", "unicredit.eu": "BANCA",
+    "bnl.it": "BANCA",
+}
+
+
+def _email_domain(email: str | None) -> str:
+    e = (email or "").strip().lower()
+    return e.split("@")[-1] if "@" in e else ""
+
+
+def company_key(azienda: str, email: str | None = None) -> str:
     """Classifica la società in SICUREZZA / PARTECIPATA / ORGINT / BANCA / PA /
-    CORP (default PA)."""
+    CORP (default PA).
+
+    Usa ANCHE il dominio email: un dominio noto è autoritativo, e un dominio
+    non-.it non può mai essere PA italiana → in mancanza di altro va in ORGINT.
+    """
+    dom = _email_domain(email)
+    if dom in _DOMAIN_KEY:
+        return _DOMAIN_KEY[dom]
+
     a = _norm(azienda)
     for key, needles in _COMPANY_PATTERNS:
         for n in needles:
             if n in a:
                 return key
+
+    # nessun match sul nome: la default sarebbe PA, ma un dominio estero
+    # (giz.de, wfp.org…) non è mai PA italiana → ORGINT.
+    if dom and not dom.endswith(".it"):
+        return "ORGINT"
     return "PA"
 
 
@@ -133,6 +173,9 @@ def company_key(azienda: str) -> str:
 # ---------------------------------------------------------------------------
 # Nomi lunghi/istituzionali → sigla breve leggibile.
 _ENTE_SHORT: list[tuple[str, str]] = [
+    ("internationale zusammenarbeit", "GIZ"),
+    ("deutsche gesellschaft", "GIZ"),
+    ("zusammenarbeit", "GIZ"),
     ("affari esteri", "MAECI"),
     ("esteri", "MAECI"),
     ("world food", "WFP"),
@@ -141,6 +184,12 @@ _ENTE_SHORT: list[tuple[str, str]] = [
     ("vigili del fuoco", "Vigili del Fuoco"),
     ("cassa depositi", "CDP"),
 ]
+# forme societarie da rimuovere dalla coda del nome ente
+_LEGAL_FORMS = {
+    "spa", "s.p.a", "s.p.a.", "srl", "s.r.l", "s.r.l.", "srls", "snc", "s.n.c.",
+    "sas", "s.a.s.", "scarl", "s.c.a.r.l.", "sapa", "gmbh", "ltd", "plc",
+    "inc", "llc", "ag", "sa",
+}
 # sigle già brevi da mantenere maiuscole
 _ACRONYMS = {
     "maeci", "wfp", "fao", "ifad", "giz", "idlo", "unido", "enit", "gse",
@@ -149,22 +198,36 @@ _ACRONYMS = {
 }
 
 
-def ente_short(azienda: str) -> str:
-    """Restituisce una forma breve e leggibile del nome ente per l'oggetto."""
+def ente_short(azienda: str) -> str | None:
+    """Forma breve e leggibile del nome ente per l'oggetto, oppure None se non
+    esprimibile in modo pulito.
+
+    Regola anti-troncamento: se l'ente non è in mappa e il nome è lungo, si
+    restituisce None (l'oggetto ometterà la parentesi) invece di troncare alla
+    prima parola (che darebbe "(Deutsche)").
+    """
     a = _norm(azienda)
     for needle, short in _ENTE_SHORT:
         if needle in a:
             return short
     raw = (azienda or "").strip()
+    # rimuove le forme societarie finali (S.p.A., Srl, GmbH…): normalizzazione,
+    # non troncamento. Evita anche "(Fendi S.p.A.)" e la falsa maiuscola che la
+    # tipografia inserirebbe dopo "S.p.A. ".
+    tokens = raw.split()
+    while tokens and tokens[-1].lower().strip(".,&") in _LEGAL_FORMS:
+        tokens.pop()
+    raw = " ".join(tokens).strip(" ,&")
     if not raw:
-        return "il suo ente"
+        return None
     if raw.lower() in _ACRONYMS or (raw.isupper() and len(raw) <= 8):
         return raw.upper()
-    # nome corto: prima parola significativa, capitalizzata
-    first = raw.split()[0]
-    if first.lower() in _ACRONYMS:
-        return first.upper()
-    return first[:1].upper() + first[1:]
+    # nome già corto e pulito (≤2 parole, non troppo lungo) → tienilo intero;
+    # altrimenti meglio niente che un troncamento fuorviante.
+    words = raw.split()
+    if len(words) <= 2 and len(raw) <= 24:
+        return raw
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -178,8 +241,8 @@ def _company_hook(key: str, ente: str) -> str:
             f"comparto lasciano scoperta la posizione personale."
         ),
         "PARTECIPATA": (
-            f"In enti come {ente} il welfare aziendale è di buon livello, ma le "
-            f"coperture personali restano spesso ferme a quello che si è "
+            f"In un ente come {ente} il welfare aziendale è di buon livello, ma "
+            f"le coperture personali restano spesso ferme a quello che si è "
             f"sottoscritto anni fa."
         ),
         "ORGINT": (
@@ -193,7 +256,7 @@ def _company_hook(key: str, ente: str) -> str:
             f"sempre inutilizzato."
         ),
         "PA": (
-            f"Dopo le ultime riforme, in enti come {ente} il gap contributivo "
+            f"Dopo le ultime riforme, in un ente come {ente} il gap contributivo "
             f"tra ultimo stipendio e prima pensione si è allargato più di quanto "
             f"le stime interne lascino intendere."
         ),
@@ -258,14 +321,15 @@ _REFERRAL = (
 # ---------------------------------------------------------------------------
 # Oggetto
 # ---------------------------------------------------------------------------
-def _subject(company: str, role: str, ente: str) -> str:
+def _subject(company: str, role: str, ente: str | None) -> str:
     if company == "BANCA" and role in ("C", "DIR"):
         return "2.280 euro l'anno, dal 2026"
-    if company == "ORGINT":
-        return f"La sua posizione previdenziale italiana ({ente})"
     if company == "SICUREZZA":
         return "Previdenza e tutele nel comparto sicurezza"
-    return f"Un secondo parere sulla sua posizione previdenziale ({ente})"
+    paren = f" ({ente})" if ente else ""      # niente parentesi se ente ignoto
+    if company == "ORGINT":
+        return f"La sua posizione previdenziale italiana{paren}"
+    return f"Un secondo parere sulla sua posizione previdenziale{paren}"
 
 
 # ---------------------------------------------------------------------------
@@ -281,13 +345,15 @@ def build_email(nome: str, azienda: str, ruolo: str,
     Nicola…) il titolo maschile vale su dominio italiano; su dominio estero si
     usa il fallback neutro senza titolo.
     """
-    company = company_key(azienda)
+    company = company_key(azienda, email)
     role = role_cluster(ruolo)
-    ente = ente_short(azienda)
+    ente_label = ente_short(azienda)                      # per l'oggetto (può essere None)
+    ente_hook = ente_label or (azienda.strip() if azienda and azienda.strip()
+                               else "il suo ente")        # per i corpi (mai None)
 
-    subject = _subject(company, role, ente)
+    subject = _subject(company, role, ente_label)
 
-    opening = _role_cut(role) + _company_hook(company, ente)
+    opening = _role_cut(role) + _company_hook(company, ente_hook)
     body_parts = [
         _greeting(nome, email),
         opening,
@@ -319,11 +385,28 @@ def _norm(s: str | None) -> str:
     return s.lower().strip()
 
 
+# Particelle nobiliari/predicati che fanno parte del cognome.
+_PARTICLES = {
+    "von", "van", "de", "di", "del", "della", "dello", "dei", "degli",
+    "da", "dos", "das", "der", "den", "du", "la", "le", "lo", "ter", "ten",
+}
+
+
 def _cognome(nome: str | None) -> str:
-    """[Cognome] = ultima parola del Nome."""
+    """[Cognome] = ultima parola del Nome, incluse le particelle che la
+    precedono (von, van, de, di, del, della, da, dos…): "Andrea Von Rauch"
+    → "Von Rauch"; "Maria De Rossi" → "De Rossi"."""
     if not nome or not nome.strip():
         return "Dottore"
-    return nome.strip().split()[-1]
+    tokens = nome.strip().split()
+    start = len(tokens) - 1
+    # estende all'indietro finché la parola precedente è una particella,
+    # mantenendo almeno il primo token come nome di battesimo.
+    j = start - 1
+    while j >= 1 and tokens[j].lower().strip(".") in _PARTICLES:
+        start = j
+        j -= 1
+    return " ".join(tokens[start:])
 
 
 # ---------------------------------------------------------------------------
