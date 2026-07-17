@@ -1,0 +1,4 @@
+[bindings.swift]
+module_name = "ClawIosSDK"
+ffi_module_name = "ClawIosSDKFFI"
+ffi_module_filename = "ClawIosSDKFFI"
