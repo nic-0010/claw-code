@@ -17,7 +17,8 @@ Prima di ogni task leggi e rispetta la specifica tecnica del sistema
 
 ## Dati reali fuori dal repo
 Il master e ogni dato reale NON sono versionati (vedi `.gitignore`). I path
-locali vivono in `config.yaml` (usa `config.local.yaml` per override macchina).
+locali vivono in `config.yaml`, che è **gitignored** (copia da `config.example.yaml`);
+così non va mai in conflitto a ogni pull. Il template versionato è `config.example.yaml`.
 
 ## Verifica
 ```

@@ -118,15 +118,38 @@ def test_oggetto_senza_parentesi_se_ente_ignoto():
 @pytest.mark.parametrize(
     "nome,expected",
     [
-        ("Andrea Von Rauch", "Von Rauch"),
-        ("Maria De Rossi", "De Rossi"),
-        ("Anna Della Valle", "Della Valle"),
+        ("Andrea Von Rauch", "von Rauch"),      # particella minuscola
+        ("Andrea von Rauch", "von Rauch"),
+        ("Maria De Rossi", "de Rossi"),
+        ("Anna Della Valle", "della Valle"),
         ("Marina Sacco", "Sacco"),              # nessuna particella
         ("Paolo", "Paolo"),
     ],
 )
 def test_cognome_con_particella(nome, expected):
     assert em._cognome(nome) == expected
+
+
+@pytest.mark.parametrize(
+    "nome,email,atteso_saluto",
+    [
+        # fallback neutro (dominio estero): "von" preservato e minuscolo
+        ("Andrea von Rauch", "andrea.von.rauch@giz.de", "Buongiorno Andrea von Rauch,"),
+        ("Andrea Von Rauch", "andrea.von.rauch@giz.de", "Buongiorno Andrea von Rauch,"),
+        # nome straniero non riconosciuto + secondo nome + particella preservati
+        ("Karl Heinz Von Braun", "k.vonbraun@giz.de", "Buongiorno Karl Heinz von Braun,"),
+        ("Jan Van Den Berg", "j.vandenberg@wfp.org", "Buongiorno Jan van den Berg,"),
+        # nome straniero puro
+        ("Esther Law", "esther.law@fao.org", "Buongiorno Esther Law,"),
+        # ramo titolato italiano: anche qui la particella è minuscola
+        ("Maria De Rossi", "maria.derossi@comune.roma.it", "Buongiorno Dott.ssa de Rossi,"),
+    ],
+)
+def test_saluto_mail_completa_particella(nome, email, atteso_saluto):
+    """La mail COMPLETA (non solo _cognome): il saluto reale del corpo deve
+    contenere la particella minuscola e tutti i token del nome."""
+    _, body, _ = em.build_email(nome, "GIZ", "Advisor", email=email)
+    assert body.splitlines()[0] == atteso_saluto
 
 
 def test_ente_short_normalizza_nomi_lunghi():
@@ -195,7 +218,7 @@ def test_saluto_ambiguo_dominio_estero_neutro():
     # Andrea su dominio estero → fallback neutro senza titolo
     _, body, _ = em.build_email("Andrea Von Rauch", "GIZ", "Advisor",
                                 email="andrea.von.rauch@giz.de")
-    assert body.startswith("Buongiorno Andrea Von Rauch,")
+    assert body.startswith("Buongiorno Andrea von Rauch,")   # particella minuscola
     assert "Dott." not in body.split("\n")[0]
     # altro ambiguo su dominio internazionale
     _, body2, _ = em.build_email("Simone Dupont", "WFP", "Officer",
