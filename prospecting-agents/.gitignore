@@ -15,7 +15,9 @@ bozze/*
 !reports/.gitkeep
 !bozze/.gitkeep
 
-# Config locale con path reali
+# Config con path reali: versionato solo il template config.example.yaml.
+# config.yaml è locale a ogni macchina (non tracciato) → niente conflitti a ogni pull.
+config.yaml
 config.local.yaml
 
 # Eval con dati reali (solo l'esempio è versionato)

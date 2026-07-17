@@ -22,26 +22,26 @@ componenti producono **bozze e report**, l'umano rilegge e preme invio.
 ## Uso rapido
 ```bash
 pip install -r requirements.txt
-cp config.yaml config.local.yaml        # adatta i path locali
+cp config.example.yaml config.yaml       # adatta i path locali (config.yaml è gitignored)
 
 # Verificatore (Componente C) — dry-run, non tocca il master
-python -m verifier.email_verifier --config config.local.yaml
-python -m verifier.email_verifier --config config.local.yaml --smtp   # probe SMTP prudente
+python -m verifier.email_verifier --config config.yaml
+python -m verifier.email_verifier --config config.yaml --smtp   # probe SMTP prudente
 
 # Scanner risposte (Componente A) — dry-run di default
-python -m scanner.reply_scanner --config config.local.yaml
-python -m scanner.reply_scanner --config config.local.yaml --apply
+python -m scanner.reply_scanner --config config.yaml
+python -m scanner.reply_scanner --config config.yaml --apply
 
 # Queue builder (Componente B) — bozze .eml + riepilogo.html in bozze/YYYYMMDD/
-python -m queue.queue_builder --config config.local.yaml
-python -m queue.queue_builder --config config.local.yaml --apply      # abilita refill
-python -m queue.lead_refill  --config config.local.yaml --apply       # rifornimento archivio
+python -m queue.queue_builder --config config.yaml
+python -m queue.queue_builder --config config.yaml --apply      # abilita refill
+python -m queue.lead_refill  --config config.yaml --apply       # rifornimento archivio
 
 # Trigger monitor (Componente D) — reports/trigger_oggi.md
-python -m triggers.trigger_monitor --config config.local.yaml
+python -m triggers.trigger_monitor --config config.yaml
 
 # Orchestrazione mattutina (APScheduler, feriali 07:30/07:45/08:00)
-python scheduler.py --config config.local.yaml
+python scheduler.py --config config.yaml
 
 # Matrice V4
 python -m evals.gen_matrix_snapshots            # rigenera gli snapshot

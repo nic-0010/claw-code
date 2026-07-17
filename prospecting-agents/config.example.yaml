@@ -1,5 +1,7 @@
-# Configurazione sistema prospecting — vincolo costo zero.
-# Copia questo file, adatta i path locali, NON committare percorsi/dati reali.
+# Template di configurazione (versionato). NON contiene path reali.
+#   cp config.example.yaml config.yaml   → poi adatta i path in config.yaml
+# config.yaml è in .gitignore: resta locale, non entra mai nel repo e non va
+# in conflitto a ogni pull.
 
 # Path del master Excel (NON versionato: contiene PII dei lead).
 master_path: "master_prospecting_generali.xlsx"

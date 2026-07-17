@@ -392,10 +392,20 @@ _PARTICLES = {
 }
 
 
+def _is_particle(token: str) -> bool:
+    return token.lower().strip(".") in _PARTICLES
+
+
+def _fix_particle_case(token: str) -> str:
+    """Le particelle (von, van, de, della…) vanno minuscole anche in tedesco e
+    italiano: "Von" → "von". Gli altri token restano invariati."""
+    return token.lower() if _is_particle(token) else token
+
+
 def _cognome(nome: str | None) -> str:
     """[Cognome] = ultima parola del Nome, incluse le particelle che la
-    precedono (von, van, de, di, del, della, da, dos…): "Andrea Von Rauch"
-    → "Von Rauch"; "Maria De Rossi" → "De Rossi"."""
+    precedono (von, van, de, di, del, della, da, dos…), con la particella
+    minuscola: "Andrea Von Rauch" → "von Rauch"; "Maria De Rossi" → "de Rossi"."""
     if not nome or not nome.strip():
         return "Dottore"
     tokens = nome.strip().split()
@@ -403,10 +413,20 @@ def _cognome(nome: str | None) -> str:
     # estende all'indietro finché la parola precedente è una particella,
     # mantenendo almeno il primo token come nome di battesimo.
     j = start - 1
-    while j >= 1 and tokens[j].lower().strip(".") in _PARTICLES:
+    while j >= 1 and _is_particle(tokens[j]):
         start = j
         j -= 1
-    return " ".join(tokens[start:])
+    return " ".join(_fix_particle_case(t) for t in tokens[start:])
+
+
+def _format_full_name(nome: str) -> str:
+    """Nome completo con le particelle minuscole, TUTTI i token preservati
+    (compresi eventuali secondi nomi): "Andrea Von Rauch" → "Andrea von Rauch",
+    "Anna Maria De Rossi" → "Anna Maria de Rossi"."""
+    toks = nome.strip().split()
+    return " ".join(
+        _fix_particle_case(t) if i > 0 else t for i, t in enumerate(toks)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -507,8 +527,10 @@ def _greeting(nome: str | None, email: str | None = None) -> str:
         return f"Buongiorno Dott. {_cognome(nome)},"
     if g == "F":
         return f"Buongiorno Dott.ssa {_cognome(nome)},"
+    # fallback neutro (nomi stranieri/ignoti): nome completo, particelle
+    # minuscole, MAI ricomposto da parts[0]+parts[-1] (perderebbe "von").
     full = (nome or "").strip()
-    return f"Buongiorno {full}," if full else "Buongiorno,"
+    return f"Buongiorno {_format_full_name(full)}," if full else "Buongiorno,"
 
 
 _STRAIGHT_APOS = "'"
