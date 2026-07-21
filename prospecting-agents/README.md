@@ -34,8 +34,14 @@ python -m scanner.reply_scanner --config config.yaml --apply
 
 # Queue builder (Componente B) — bozze .eml + riepilogo.html in bozze/YYYYMMDD/
 python -m queue.queue_builder --config config.yaml
-python -m queue.queue_builder --config config.yaml --apply      # abilita refill
+python -m queue.queue_builder --config config.yaml --apply             # abilita refill
+python -m queue.queue_builder --config config.yaml --outlook-drafts    # bozze in Outlook (macOS)
 python -m queue.lead_refill  --config config.yaml --apply       # rifornimento archivio
+
+# Registrazione invii del giorno nel Registro (fine mattina)
+python -m scripts.log_invii --config config.yaml                        # dry-run
+python -m scripts.log_invii --config config.yaml --apply
+python -m scripts.log_invii --config config.yaml --escludi a@x.it --apply   # salta non inviate
 
 # Trigger monitor (Componente D) — reports/trigger_oggi.md
 python -m triggers.trigger_monitor --config config.yaml

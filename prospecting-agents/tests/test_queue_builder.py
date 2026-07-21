@@ -59,10 +59,15 @@ def make_master(tmp_path: Path, n_coda: int = 15, n_nuovi: int = 10) -> Path:
     fu = wb.create_sheet("Follow-up e riprese")
     fu.append(["Score", "Segmento", "Persona", "Nome", "Azienda", "Ruolo",
                "Email", "Ultimo invio", "Gg lavorativi", "Tipo azione", "Template"])
+    # "Ultimo invio" con date reali rispetto a TODAY (10/07/2026); "Tipo azione"
+    # lasciata VUOTA di proposito (come dopo un salvataggio openpyxl che azzera
+    # la cache): il tipo deve essere ricalcolato in Python da "Ultimo invio".
+    d_followup = datetime(2026, 6, 25)   # ~11 gg lavorativi fa → follow-up standard
+    d_ripresa = datetime(2026, 5, 20)    # >25 gg lavorativi fa → ripresa
     for i in range(1, 13):
-        tipo = "Follow-up standard" if i <= 8 else "Ripresa contatto"
+        ultimo = d_followup if i <= 8 else d_ripresa
         fu.append([50 + i, "PA", "Q", f"Fu{i} Cog{i}", f"FuEnte{i}", "Manager",
-                   f"fu{i}@fuente{i}.it", "", "", tipo, ""])
+                   f"fu{i}@fuente{i}.it", ultimo, "", "", ""])
 
     tpl = wb.create_sheet("Template")
     tpl.append(["Template", "Oggetto", "Corpo"])
@@ -108,6 +113,30 @@ def test_batch_12_fredde_10_fu_5_riprese(tmp_path):
     assert len(fu) == 8          # solo 8 follow-up maturi nel fixture
     assert len(rip) == 4         # 4 riprese nel fixture
     assert len(batch) <= 30
+
+
+def test_followup_robusto_a_cache_formule_azzerate(tmp_path):
+    """REGRESSIONE (bug di campo): con la col 'Tipo azione' come FORMULA la cui
+    cache è azzerata (stato dopo un salvataggio openpyxl), il batch deve
+    contenere comunque follow-up e riprese — calcolati da 'Ultimo invio'."""
+    master = make_master(tmp_path)
+    wb = openpyxl.load_workbook(master)
+    ws = wb["Follow-up e riprese"]
+    for r in range(2, ws.max_row + 1):
+        ws.cell(r, 10, f'=IF(I{r}<4,"In attesa",IF(I{r}>25,"Ripresa","Follow-up"))')
+        ws.cell(r, 9, f"=MAX(NETWORKDAYS(H{r},TODAY())-1,0)")
+    wb.save(master)                                  # openpyxl → cache formule azzerata
+
+    # data_only=True ora legge None per Tipo azione: senza il fix il batch
+    # avrebbe 0 follow-up.
+    reloaded = io.load(master, data_only=True)
+    assert all(io.read_rows(reloaded, "Follow-up e riprese")[i].get("Tipo azione") is None
+               for i in range(3))                    # cache davvero vuota
+    batch = qb.select_batch(reloaded, CFG, today=TODAY)
+    fu = [b for b in batch if b["tipo"] == "follow-up"]
+    rip = [b for b in batch if b["tipo"] == "ripresa"]
+    assert len(fu) == 8, [b["tipo"] for b in batch]
+    assert len(rip) == 4
 
 
 def test_split_abc_4_4_4(tmp_path):
@@ -305,6 +334,31 @@ def test_fallback_a_nuovi_contatti_quando_code_esaurite(tmp_path):
 # --------------------------------------------------------------------------
 # Render
 # --------------------------------------------------------------------------
+def test_applescript_draft_salva_mai_invia():
+    item = {"oggetto": 'Ogg "citato"', "corpo": "riga1\nriga2 con \"virg\"",
+            "email": "mario@ente.it"}
+    script = qb.applescript_draft(item)
+    assert "Microsoft Outlook" in script
+    assert "save newMsg" in script          # persiste come bozza
+    assert "send" not in script             # MAI invio
+    # escaping: virgolette escapate, newline reale via linefeed
+    assert '\\"citato\\"' in script
+    assert "linefeed" in script
+    assert "mario@ente.it" in script
+    # nessun newline grezzo dentro il literal della property content
+    content_line = [l for l in script.splitlines() if "plain text content" in l][0]
+    assert "riga1" in content_line and "riga2" in content_line
+
+
+def test_create_outlook_drafts_fallback_non_macos(monkeypatch):
+    # forza ambiente non-macOS → available False, il chiamante userà i .eml
+    monkeypatch.setattr(qb.sys, "platform", "linux")
+    res = qb.create_outlook_drafts([{"email": "x@y.it", "oggetto": "o", "corpo": "c"}], CFG)
+    assert res["available"] is False
+    assert res["created"] == 0
+    assert res["reason"]
+
+
 def test_render_placeholders():
     out = qb.render_placeholders(
         "Gentile [Cognome] di [Ente], ci vediamo a [mese] il [GG] alle [HH:MM].",
