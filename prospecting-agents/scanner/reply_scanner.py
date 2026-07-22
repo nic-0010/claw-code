@@ -409,18 +409,20 @@ def apply_results(
 
 
 # --------------------------------------------------------------------------
-# 4) Follow-up maturati (sola LETTURA delle formule del foglio)
+# 4) Follow-up maturati (calcolo in Python da "Ultimo invio", NON dalle formule)
 # --------------------------------------------------------------------------
 def followup_summary(master_path: str | Path) -> dict[str, int]:
-    """Conta follow-up e riprese maturati oggi leggendo `Tipo azione`
-    (valori cache delle formule). Nessuna scrittura, nessun ricalcolo."""
+    """Conta follow-up e riprese maturati oggi. Il tipo azione è ricalcolato in
+    Python dalla col H `Ultimo invio` (la col J è una formula la cui cache
+    sparisce dopo un salvataggio openpyxl). Nessuna scrittura."""
     from common import io_master as io
+    from common import followup
 
     wb = io.load(master_path, data_only=True)
     counts = Counter()
     if "Follow-up e riprese" in wb.sheetnames:
         for r in io.read_rows(wb, "Follow-up e riprese"):
-            tipo = str(r.get("Tipo azione") or "").strip()
+            tipo = followup.tipo_azione(r.get("Ultimo invio")) or ""
             if tipo.startswith("Follow-up"):
                 counts["follow_up"] += 1
             elif tipo.startswith("Ripresa"):

@@ -46,6 +46,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from common import email_matrix  # noqa: E402
+from common import followup  # noqa: E402
 
 MESI_IT = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
            "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre")
@@ -180,6 +181,7 @@ def select_batch(wb, cfg: dict, today: datetime | None = None) -> list[dict]:
     """
     from common import io_master as io
 
+    today = today or datetime.now()
     caps = cfg.get("caps", {})
     cap_tot = caps.get("totale", 30)
     cap_fredde = caps.get("fredde", 12)
@@ -305,7 +307,10 @@ def select_batch(wb, cfg: dict, today: datetime | None = None) -> list[dict]:
         t_f1 = pick_template(templates, "SEQUENZA · F1")
         t_rip = pick_template(templates, "RIPRESA")
         for r in rows:
-            tipo = str(r.get("Tipo azione") or "").strip()
+            # Tipo azione calcolato in Python da "Ultimo invio" (col H): la
+            # colonna J è una formula e la sua cache sparisce dopo un salvataggio
+            # openpyxl. Non leggere mai il valore cached.
+            tipo = followup.tipo_azione(r.get("Ultimo invio"), today.date()) or ""
             item = {
                 "nome": r.get("Nome") or "", "azienda": r.get("Azienda") or "",
                 "ruolo": r.get("Ruolo") or "", "email": r.get("Email") or "",
@@ -544,33 +549,96 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Autonomia residua: scorte lead ~{autonomy_days(n_valid)} giorni al ritmo attuale")
 
     if args.outlook_drafts:
-        _outlook_drafts(batch, cfg)
+        res = create_outlook_drafts(batch, cfg)
+        if res["available"]:
+            print(f"Outlook: {res['created']} bozze salvate nei Draft"
+                  + (f", {res['failed']} fallite" if res["failed"] else "")
+                  + " (nessuna inviata).")
+            for err in res["errors"][:3]:
+                print(f"  · {err}")
+        else:
+            print(f"Outlook non raggiungibile ({res['reason']}). "
+                  f"Fallback: usa i file .eml in {out_dir}.")
 
     notify("Queue builder", f"{len(batch)} bozze pronte in {out_dir}")
     return 0
 
 
-def _outlook_drafts(batch: list[dict], cfg: dict) -> None:
-    """Crea BOZZE in Outlook (macOS, osascript). Non invia mai."""
+def _as_applescript(s: str) -> str:
+    """Escape sicuro di una stringa Python in un literal AppleScript: backslash e
+    virgolette escapate, newline reali via costante `linefeed`."""
+    s = (s or "").replace("\\", "\\\\").replace('"', '\\"')
+    return s.replace("\n", '" & linefeed & "')
+
+
+def applescript_draft(item: dict, sender: str = "") -> str:
+    """AppleScript che crea UNA bozza in Outlook e la SALVA nei Draft (mai
+    inviata). Funzione pura → testabile senza macOS."""
+    subj = _as_applescript(item.get("oggetto", ""))
+    body = _as_applescript(item.get("corpo", ""))
+    email = _as_applescript(item.get("email", ""))
+    return (
+        'tell application "Microsoft Outlook"\n'
+        f'  set newMsg to make new outgoing message with properties '
+        f'{{subject:"{subj}", plain text content:"{body}"}}\n'
+        f'  make new recipient at newMsg with properties '
+        f'{{email address:{{address:"{email}"}}}}\n'
+        '  save newMsg\n'                     # persiste come BOZZA; MAI "send"
+        'end tell'
+    )
+
+
+def _outlook_reachable() -> tuple[bool, str]:
+    """Verifica che Outlook sia avviabile via AppleScript. Ritorna (ok, motivo)."""
     import shutil
     import subprocess
 
-    if sys.platform != "darwin" or not shutil.which("osascript"):
-        print("--outlook-drafts: disponibile solo su macOS con osascript.")
-        return
-    for item in batch:
-        subj = item["oggetto"].replace('"', "'")
-        body = item["corpo"].replace('"', "'").replace("\n", "\\n")
-        script = (
-            'tell application "Microsoft Outlook"\n'
-            f'  set newMsg to make new outgoing message with properties '
-            f'{{subject:"{subj}", plain text content:"{body}"}}\n'
-            f'  make new recipient at newMsg with properties '
-            f'{{email address:{{address:"{item["email"]}"}}}}\n'
-            "  open newMsg\n"
-            "end tell"
+    if sys.platform != "darwin":
+        return False, "non macOS"
+    if not shutil.which("osascript"):
+        return False, "osascript assente"
+    try:
+        p = subprocess.run(
+            ["osascript", "-e", 'tell application "Microsoft Outlook" to get name'],
+            capture_output=True, text=True, timeout=20,
         )
-        subprocess.run(["osascript", "-e", script], capture_output=True)
+    except Exception as exc:  # timeout, ecc.
+        return False, type(exc).__name__
+    if p.returncode != 0:
+        return False, (p.stderr or "errore osascript").strip().splitlines()[-1:][0] \
+            if p.stderr else "errore osascript"
+    return True, ""
+
+
+def create_outlook_drafts(batch: list[dict], cfg: dict) -> dict:
+    """Crea le bozze in Outlook (macOS). Non invia mai. Se Outlook non è
+    raggiungibile ritorna available=False (il chiamante fa fallback sui .eml)."""
+    import subprocess
+
+    ok, reason = _outlook_reachable()
+    if not ok:
+        return {"available": False, "reason": reason, "created": 0,
+                "failed": 0, "errors": []}
+
+    sender = f'{cfg.get("sender_name", "")} <{cfg.get("sender_email", "")}>'.strip()
+    created = failed = 0
+    errors: list[str] = []
+    for item in batch:
+        try:
+            p = subprocess.run(
+                ["osascript", "-e", applescript_draft(item, sender)],
+                capture_output=True, text=True, timeout=30,
+            )
+            if p.returncode == 0:
+                created += 1
+            else:
+                failed += 1
+                errors.append(f"{item.get('email','?')}: {(p.stderr or '').strip()}")
+        except Exception as exc:
+            failed += 1
+            errors.append(f"{item.get('email','?')}: {type(exc).__name__}")
+    return {"available": True, "reason": "", "created": created,
+            "failed": failed, "errors": errors}
 
 
 if __name__ == "__main__":
