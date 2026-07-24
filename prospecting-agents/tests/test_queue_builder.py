@@ -286,9 +286,10 @@ def test_zero_contatti_in_blacklist_nel_batch(tmp_path):
     master = make_master(tmp_path)
     wb = _load(master)
     batch = qb.select_batch(wb, CFG, today=TODAY)
-    non_riscrivere, stato_email = qb.build_exclusions(wb)
+    non_riscrivere, stato_email, blocked = qb.build_exclusions(wb)
     for b in batch:
         assert b["email"].lower() not in stato_email
+        assert b["email"].lower() not in blocked
         assert qb._norm_key(b["nome"], b["azienda"]) not in non_riscrivere
 
 

@@ -99,9 +99,15 @@ def _domain(email: str | None) -> str:
 # --------------------------------------------------------------------------
 # Esclusioni dure
 # --------------------------------------------------------------------------
-def build_exclusions(wb) -> tuple[set[tuple[str, str]], set[str]]:
+# marcatore scritto da scripts/applica_verifica.py nella Nota/Note dei lead a
+# rischio alto di rimbalzo → esclusi dal batch.
+BLOCK_MARKER = "non inviare"
+
+
+def build_exclusions(wb) -> tuple[set[tuple[str, str]], set[str], set[str]]:
     """Ritorna (set Nome+Azienda da Non riscrivere,
-                set email dal Registro con Stato ≠ Nessuna risposta)."""
+                set email dal Registro con Stato ≠ Nessuna risposta,
+                set email bloccate — Nota/Note contiene "Non inviare")."""
     from common import io_master as io
 
     non_riscrivere: set[tuple[str, str]] = set()
@@ -118,13 +124,25 @@ def build_exclusions(wb) -> tuple[set[tuple[str, str]], set[str]]:
             stato = str(r.get("Stato") or "").strip()
             if email and stato and stato != "Nessuna risposta":
                 stato_email.add(email)
-    return non_riscrivere, stato_email
+
+    blocked: set[str] = set()
+    for sheet in wb.sheetnames:
+        if sheet not in ("Nuovi contatti",) and not sheet.startswith("Coda invii"):
+            continue
+        for r in io.read_rows(wb, sheet):
+            email = str(r.get("Email") or "").strip().lower()
+            nota = f"{r.get('Nota') or ''} {r.get('Note') or ''}".lower()
+            if email and BLOCK_MARKER in nota:
+                blocked.add(email)
+    return non_riscrivere, stato_email, blocked
 
 
 def is_excluded(contact: dict, non_riscrivere: set, stato_email: set,
-                domini_congelati: set[str]) -> bool:
+                domini_congelati: set[str], blocked: set[str] | None = None) -> bool:
     email = str(contact.get("email") or "").strip().lower()
     if email in stato_email:
+        return True
+    if blocked and email in blocked:
         return True
     if _domain(email) in domini_congelati:
         return True
@@ -191,7 +209,7 @@ def select_batch(wb, cfg: dict, today: datetime | None = None) -> list[dict]:
     cap_domain = caps.get("stesso_dominio", 8)
     domini_congelati = set(cfg.get("domini_congelati") or [])
 
-    non_riscrivere, stato_email = build_exclusions(wb)
+    non_riscrivere, stato_email, blocked = build_exclusions(wb)
     templates = load_templates(wb)
 
     batch: list[dict] = []
@@ -206,7 +224,7 @@ def select_batch(wb, cfg: dict, today: datetime | None = None) -> list[dict]:
             return False
         if len(batch) >= cap_tot:
             return False
-        if is_excluded(item, non_riscrivere, stato_email, domini_congelati):
+        if is_excluded(item, non_riscrivere, stato_email, domini_congelati, blocked):
             return False
         dom = _domain(email)
         if domain_count[dom] >= cap_domain:

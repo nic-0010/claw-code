@@ -27,6 +27,9 @@ cp config.example.yaml config.yaml       # adatta i path locali (config.yaml è 
 # Verificatore (Componente C) — dry-run, non tocca il master
 python -m verifier.email_verifier --config config.yaml
 python -m verifier.email_verifier --config config.yaml --smtp   # probe SMTP prudente
+# Applica gli esiti al master: blocca i RISCHIO ALTO, corregge i CORREGGERE (conf ≥0.8)
+python -m scripts.applica_verifica --config config.yaml                 # dry-run
+python -m scripts.applica_verifica --config config.yaml --apply
 
 # Scanner risposte (Componente A) — dry-run di default
 python -m scanner.reply_scanner --config config.yaml
