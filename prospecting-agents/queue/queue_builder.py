@@ -582,28 +582,36 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _as_applescript(s: str) -> str:
-    """Escape sicuro di una stringa Python in un literal AppleScript: backslash e
-    virgolette escapate, newline reali via costante `linefeed`."""
-    s = (s or "").replace("\\", "\\\\").replace('"', '\\"')
-    return s.replace("\n", '" & linefeed & "')
+# Script AppleScript FISSO: nessun testo utente interpolato qui dentro. Oggetto,
+# corpo ed email arrivano come argomenti (argv), quindi caratteri come virgolette
+# curve, apostrofi tipografici, trattini lunghi, accenti e a-capo NON vengono mai
+# interpretati come codice AppleScript (era la causa del syntax error -2741).
+OUTLOOK_DRAFT_SCRIPT = (
+    "on run argv\n"
+    "    set theSubject to item 1 of argv\n"
+    "    set theBody to item 2 of argv\n"
+    "    set theEmail to item 3 of argv\n"
+    '    tell application "Microsoft Outlook"\n'
+    "        set newMsg to make new outgoing message with properties "
+    "{subject:theSubject, plain text content:theBody}\n"
+    "        make new recipient at newMsg with properties "
+    "{email address:{address:theEmail}}\n"
+    "        save newMsg\n"                    # persiste come BOZZA; MAI "send"
+    "    end tell\n"
+    "end run"
+)
 
 
-def applescript_draft(item: dict, sender: str = "") -> str:
-    """AppleScript che crea UNA bozza in Outlook e la SALVA nei Draft (mai
-    inviata). Funzione pura → testabile senza macOS."""
-    subj = _as_applescript(item.get("oggetto", ""))
-    body = _as_applescript(item.get("corpo", ""))
-    email = _as_applescript(item.get("email", ""))
-    return (
-        'tell application "Microsoft Outlook"\n'
-        f'  set newMsg to make new outgoing message with properties '
-        f'{{subject:"{subj}", plain text content:"{body}"}}\n'
-        f'  make new recipient at newMsg with properties '
-        f'{{email address:{{address:"{email}"}}}}\n'
-        '  save newMsg\n'                     # persiste come BOZZA; MAI "send"
-        'end tell'
-    )
+def outlook_draft_argv(item: dict) -> list[str]:
+    """Comando osascript per creare UNA bozza: lo script è fisso, il testo va in
+    argv. Funzione pura → testabile senza macOS. L'oggetto/corpo/email finiscono
+    come argomenti verbatim, senza escaping né interpretazione."""
+    return [
+        "osascript", "-e", OUTLOOK_DRAFT_SCRIPT,
+        str(item.get("oggetto", "")),
+        str(item.get("corpo", "")),
+        str(item.get("email", "")),
+    ]
 
 
 def _outlook_reachable() -> tuple[bool, str]:
@@ -638,13 +646,12 @@ def create_outlook_drafts(batch: list[dict], cfg: dict) -> dict:
         return {"available": False, "reason": reason, "created": 0,
                 "failed": 0, "errors": []}
 
-    sender = f'{cfg.get("sender_name", "")} <{cfg.get("sender_email", "")}>'.strip()
     created = failed = 0
     errors: list[str] = []
     for item in batch:
         try:
             p = subprocess.run(
-                ["osascript", "-e", applescript_draft(item, sender)],
+                outlook_draft_argv(item),
                 capture_output=True, text=True, timeout=30,
             )
             if p.returncode == 0:

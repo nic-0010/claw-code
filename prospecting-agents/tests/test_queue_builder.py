@@ -335,20 +335,34 @@ def test_fallback_a_nuovi_contatti_quando_code_esaurite(tmp_path):
 # --------------------------------------------------------------------------
 # Render
 # --------------------------------------------------------------------------
-def test_applescript_draft_salva_mai_invia():
-    item = {"oggetto": 'Ogg "citato"', "corpo": "riga1\nriga2 con \"virg\"",
-            "email": "mario@ente.it"}
-    script = qb.applescript_draft(item)
-    assert "Microsoft Outlook" in script
-    assert "save newMsg" in script          # persiste come bozza
-    assert "send" not in script             # MAI invio
-    # escaping: virgolette escapate, newline reale via linefeed
-    assert '\\"citato\\"' in script
-    assert "linefeed" in script
-    assert "mario@ente.it" in script
-    # nessun newline grezzo dentro il literal della property content
-    content_line = [l for l in script.splitlines() if "plain text content" in l][0]
-    assert "riga1" in content_line and "riga2" in content_line
+def test_outlook_script_fisso_argv_salva_mai_invia():
+    # lo script è FISSO: usa argv, salva come bozza, non invia mai
+    assert "on run argv" in qb.OUTLOOK_DRAFT_SCRIPT
+    assert "item 1 of argv" in qb.OUTLOOK_DRAFT_SCRIPT
+    assert "save newMsg" in qb.OUTLOOK_DRAFT_SCRIPT
+    assert "send" not in qb.OUTLOOK_DRAFT_SCRIPT
+
+
+def test_outlook_draft_argv_testo_verbatim_caratteri_critici():
+    """Il testo con virgolette curve, apostrofo tipografico, trattino lungo,
+    accenti e a-capo passa VERBATIM in argv (nessuna interpretazione/escaping)."""
+    item = {
+        "oggetto": "La sua posizione previdenziale italiana (GIZ)",
+        "corpo": ("Buongiorno Andrea von Rauch,\n\nchi ricopre un ruolo come il "
+                  "suo — con un’aliquota al 43% — «un secondo parere» d’imposta è "
+                  'una scelta "efficiente".'),
+        "email": "andrea.von.rauch@giz.de",
+    }
+    argv = qb.outlook_draft_argv(item)
+    assert argv[0] == "osascript" and argv[1] == "-e"
+    assert argv[2] == qb.OUTLOOK_DRAFT_SCRIPT      # script fisso, senza il testo
+    # oggetto/corpo/email sono argomenti separati, identici all'originale
+    assert argv[3] == item["oggetto"]
+    assert argv[4] == item["corpo"]                # trattino, curve, apostrofo, \n intatti
+    assert argv[5] == item["email"]
+    # il testo utente NON è dentro lo script (niente interpretazione AppleScript)
+    assert "von Rauch" not in argv[2]
+    assert "—" not in argv[2] and "’" not in argv[2]
 
 
 def test_create_outlook_drafts_fallback_non_macos(monkeypatch):
