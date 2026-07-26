@@ -344,25 +344,60 @@ def test_outlook_script_fisso_argv_salva_mai_invia():
 
 
 def test_outlook_draft_argv_testo_verbatim_caratteri_critici():
-    """Il testo con virgolette curve, apostrofo tipografico, trattino lungo,
-    accenti e a-capo passa VERBATIM in argv (nessuna interpretazione/escaping)."""
-    item = {
-        "oggetto": "La sua posizione previdenziale italiana (GIZ)",
-        "corpo": ("Buongiorno Andrea von Rauch,\n\nchi ricopre un ruolo come il "
-                  "suo — con un’aliquota al 43% — «un secondo parere» d’imposta è "
-                  'una scelta "efficiente".'),
-        "email": "andrea.von.rauch@giz.de",
-    }
+    """La mail C REALE di von Rauch (—, apostrofo curvo ', accenti, il · della
+    firma, a-capo) passa VERBATIM in argv: niente interpretazione/escaping."""
+    from common import email_matrix as em
+
+    subj, body, _ = em.build_email(
+        "Andrea von Rauch",
+        "Deutsche Gesellschaft für Internationale Zusammenarbeit", "Advisor",
+        email="andrea.von.rauch@giz.de")
+    # precondizione: il corpo contiene davvero i caratteri critici
+    assert "—" in body and "’" in body and "·" in body
+    assert any(c in body for c in "àèìòù")
+
+    item = {"oggetto": subj, "corpo": body, "email": "andrea.von.rauch@giz.de"}
     argv = qb.outlook_draft_argv(item)
     assert argv[0] == "osascript" and argv[1] == "-e"
     assert argv[2] == qb.OUTLOOK_DRAFT_SCRIPT      # script fisso, senza il testo
-    # oggetto/corpo/email sono argomenti separati, identici all'originale
-    assert argv[3] == item["oggetto"]
-    assert argv[4] == item["corpo"]                # trattino, curve, apostrofo, \n intatti
-    assert argv[5] == item["email"]
+    assert argv[3] == subj
+    assert argv[4] == body                          # trattino, curve, ·, accenti, \n intatti
+    assert argv[5] == "andrea.von.rauch@giz.de"
     # il testo utente NON è dentro lo script (niente interpretazione AppleScript)
-    assert "von Rauch" not in argv[2]
-    assert "—" not in argv[2] and "’" not in argv[2]
+    for ch in ("von Rauch", "—", "’", "·"):
+        assert ch not in argv[2]
+
+
+def test_create_outlook_drafts_batch_boundary(tmp_path, monkeypatch):
+    """Round-trip attraverso il confine del processo osascript con uno stub:
+    l'intero batch va a buon fine e il testo (·, —, ') arriva verbatim."""
+    import subprocess
+
+    from common import email_matrix as em
+
+    captured = []
+
+    def fake_run(cmd, **kw):
+        # cmd == [osascript, -e, SCRIPT, subj, body, email]
+        assert cmd[2] == qb.OUTLOOK_DRAFT_SCRIPT
+        captured.append(cmd[4])                     # body verbatim
+        class P:
+            returncode = 0
+            stderr = ""
+        return P()
+
+    monkeypatch.setattr(qb, "_outlook_reachable", lambda: (True, ""))
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    batch = []
+    for i in range(5):
+        s, b, _ = em.build_email(f"Tizio Caio{i}", ["GSE", "Fendi S.p.A."][i % 2],
+                                 "Manager", email=f"t.caio{i}@ente{i}.it")
+        batch.append({"oggetto": s, "corpo": b, "email": f"t.caio{i}@ente{i}.it"})
+    res = qb.create_outlook_drafts(batch, {})
+    assert res == {"available": True, "reason": "", "created": 5, "failed": 0, "errors": []}
+    assert len(captured) == 5
+    assert all("·" in body for body in captured)    # firma verbatim in tutte
 
 
 def test_create_outlook_drafts_fallback_non_macos(monkeypatch):
