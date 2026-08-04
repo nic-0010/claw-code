@@ -286,9 +286,10 @@ def test_zero_contatti_in_blacklist_nel_batch(tmp_path):
     master = make_master(tmp_path)
     wb = _load(master)
     batch = qb.select_batch(wb, CFG, today=TODAY)
-    non_riscrivere, stato_email = qb.build_exclusions(wb)
+    non_riscrivere, stato_email, blocked = qb.build_exclusions(wb)
     for b in batch:
         assert b["email"].lower() not in stato_email
+        assert b["email"].lower() not in blocked
         assert qb._norm_key(b["nome"], b["azienda"]) not in non_riscrivere
 
 
@@ -334,20 +335,69 @@ def test_fallback_a_nuovi_contatti_quando_code_esaurite(tmp_path):
 # --------------------------------------------------------------------------
 # Render
 # --------------------------------------------------------------------------
-def test_applescript_draft_salva_mai_invia():
-    item = {"oggetto": 'Ogg "citato"', "corpo": "riga1\nriga2 con \"virg\"",
-            "email": "mario@ente.it"}
-    script = qb.applescript_draft(item)
-    assert "Microsoft Outlook" in script
-    assert "save newMsg" in script          # persiste come bozza
-    assert "send" not in script             # MAI invio
-    # escaping: virgolette escapate, newline reale via linefeed
-    assert '\\"citato\\"' in script
-    assert "linefeed" in script
-    assert "mario@ente.it" in script
-    # nessun newline grezzo dentro il literal della property content
-    content_line = [l for l in script.splitlines() if "plain text content" in l][0]
-    assert "riga1" in content_line and "riga2" in content_line
+def test_outlook_script_fisso_argv_salva_mai_invia():
+    # lo script è FISSO: usa argv, salva come bozza, non invia mai
+    assert "on run argv" in qb.OUTLOOK_DRAFT_SCRIPT
+    assert "item 1 of argv" in qb.OUTLOOK_DRAFT_SCRIPT
+    assert "save newMsg" in qb.OUTLOOK_DRAFT_SCRIPT
+    assert "send" not in qb.OUTLOOK_DRAFT_SCRIPT
+
+
+def test_outlook_draft_argv_testo_verbatim_caratteri_critici():
+    """La mail C REALE di von Rauch (—, apostrofo curvo ', accenti, il · della
+    firma, a-capo) passa VERBATIM in argv: niente interpretazione/escaping."""
+    from common import email_matrix as em
+
+    subj, body, _ = em.build_email(
+        "Andrea von Rauch",
+        "Deutsche Gesellschaft für Internationale Zusammenarbeit", "Advisor",
+        email="andrea.von.rauch@giz.de")
+    # precondizione: il corpo contiene davvero i caratteri critici
+    assert "—" in body and "’" in body and "·" in body
+    assert any(c in body for c in "àèìòù")
+
+    item = {"oggetto": subj, "corpo": body, "email": "andrea.von.rauch@giz.de"}
+    argv = qb.outlook_draft_argv(item)
+    assert argv[0] == "osascript" and argv[1] == "-e"
+    assert argv[2] == qb.OUTLOOK_DRAFT_SCRIPT      # script fisso, senza il testo
+    assert argv[3] == subj
+    assert argv[4] == body                          # trattino, curve, ·, accenti, \n intatti
+    assert argv[5] == "andrea.von.rauch@giz.de"
+    # il testo utente NON è dentro lo script (niente interpretazione AppleScript)
+    for ch in ("von Rauch", "—", "’", "·"):
+        assert ch not in argv[2]
+
+
+def test_create_outlook_drafts_batch_boundary(tmp_path, monkeypatch):
+    """Round-trip attraverso il confine del processo osascript con uno stub:
+    l'intero batch va a buon fine e il testo (·, —, ') arriva verbatim."""
+    import subprocess
+
+    from common import email_matrix as em
+
+    captured = []
+
+    def fake_run(cmd, **kw):
+        # cmd == [osascript, -e, SCRIPT, subj, body, email]
+        assert cmd[2] == qb.OUTLOOK_DRAFT_SCRIPT
+        captured.append(cmd[4])                     # body verbatim
+        class P:
+            returncode = 0
+            stderr = ""
+        return P()
+
+    monkeypatch.setattr(qb, "_outlook_reachable", lambda: (True, ""))
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    batch = []
+    for i in range(5):
+        s, b, _ = em.build_email(f"Tizio Caio{i}", ["GSE", "Fendi S.p.A."][i % 2],
+                                 "Manager", email=f"t.caio{i}@ente{i}.it")
+        batch.append({"oggetto": s, "corpo": b, "email": f"t.caio{i}@ente{i}.it"})
+    res = qb.create_outlook_drafts(batch, {})
+    assert res == {"available": True, "reason": "", "created": 5, "failed": 0, "errors": []}
+    assert len(captured) == 5
+    assert all("·" in body for body in captured)    # firma verbatim in tutte
 
 
 def test_create_outlook_drafts_fallback_non_macos(monkeypatch):
