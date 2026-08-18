@@ -43,6 +43,22 @@ paths:
   reports: "reports"
   bozze: "bozze"
 
+# Bozze via IMAP (Componente B, flag --imap-drafts). Alternativa ad AppleScript:
+# carica le stesse bozze nella cartella Bozze della casella, da qualunque sistema
+# operativo. È solo APPEND con flag \Draft — non invia mai nulla.
+#   export IMAP_PASSWORD='...'   # password/app-password, MAI in questo file
+#   python -m queue.queue_builder --config config.yaml --imap-drafts
+imap:
+  host: "outlook.office365.com"
+  port: 993
+  user: "nicolo.porru@generali.com"
+  # Nome della variabile d'ambiente da cui leggere la password (non la password).
+  password_env: "IMAP_PASSWORD"
+  # Nome ESATTO della cartella bozze sul server: su casella in italiano è
+  # "Bozze". Se sbagliato, il run si ferma subito dicendolo, senza caricare nulla.
+  drafts_folder: "Drafts"
+  timeout_s: 30
+
 # Parametri del verificatore email (Componente C).
 verifier:
   min_examples_for_pattern: 3   # esempi 'valid' per dichiarare un pattern di dominio

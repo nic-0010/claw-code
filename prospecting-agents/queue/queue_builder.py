@@ -22,8 +22,11 @@ contatti presi (UNICHE scritture ammesse: append-only + backup).
 Render: [Cognome]=ultima parola del Nome, [Ente]=Azienda, [Nome], [mese];
 segnaposto irrisolti → ⟦…⟧ così saltano all'occhio.
 
-Output: bozze/YYYYMMDD/*.eml (RFC 822) + riepilogo.html. Su macOS,
---outlook-drafts crea bozze in Outlook via AppleScript (MAI invia).
+Output: bozze/YYYYMMDD/*.eml (RFC 822) + riepilogo.html. Le bozze possono
+finire direttamente nella cartella Bozze della casella, in due modi
+alternativi — entrambi opzionali, entrambi solo APPEND/save, MAI invio:
+  --outlook-drafts  via AppleScript (solo macOS, richiede Outlook "classico")
+  --imap-drafts     via IMAP APPEND (ovunque, nessuna dipendenza da macOS)
 
 Uso:
     python -m queue.queue_builder --config config.yaml            # dry-run
@@ -33,13 +36,17 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
+import imaplib
+import os
 import re
 import sys
 import unicodedata
 from collections import Counter
 from datetime import datetime
 from email.message import EmailMessage
+from email.utils import format_datetime
 from pathlib import Path
 from typing import Any
 
@@ -373,6 +380,41 @@ def ensure_signature(corpo: str) -> str:
 # --------------------------------------------------------------------------
 # Output: .eml + riepilogo.html
 # --------------------------------------------------------------------------
+def draft_message_id(item: dict, cfg: dict, today: datetime | None = None) -> str:
+    """Message-ID DETERMINISTICO: stesso contatto, stesso testo, stesso giorno →
+    stesso id. È la chiave di idempotenza delle bozze IMAP (regola 6): rieseguire
+    il batch non crea doppioni in casella. Il giorno è nel digest, quindi la
+    riproposta di domani è legittimamente una bozza nuova."""
+    today = today or datetime.now()
+    payload = "|".join((
+        f"{today:%Y%m%d}",
+        str(item.get("email", "")),
+        str(item.get("oggetto", "")),
+        str(item.get("corpo", "")),
+        str(item.get("variante", "")),
+    ))
+    digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+    domain = str(cfg.get("sender_email", "")).rpartition("@")[2] or "localhost"
+    return f"<prospecting.{today:%Y%m%d}.{digest}@{domain}>"
+
+
+def build_message(item: dict, cfg: dict, today: datetime | None = None) -> EmailMessage:
+    """Il messaggio di UNA bozza. Sorgente unica: i .eml su disco e le bozze
+    caricate via IMAP sono lo stesso byte-per-byte, quindi non possono divergere.
+    Funzione pura → testabile senza casella né rete."""
+    today = today or datetime.now()
+    msg = EmailMessage()
+    msg["From"] = f'{cfg.get("sender_name", "")} <{cfg.get("sender_email", "")}>'
+    msg["To"] = item["email"]
+    msg["Subject"] = item["oggetto"]
+    msg["Date"] = format_datetime(today)
+    msg["Message-ID"] = draft_message_id(item, cfg, today=today)
+    msg["X-Prospecting-Variante"] = item.get("variante", "")
+    msg["X-Prospecting-Versione"] = item.get("versione", "")
+    msg.set_content(item["corpo"])
+    return msg
+
+
 def write_outputs(batch: list[dict], cfg: dict, out_root: str | Path | None = None,
                   today: datetime | None = None) -> Path:
     today = today or datetime.now()
@@ -380,15 +422,8 @@ def write_outputs(batch: list[dict], cfg: dict, out_root: str | Path | None = No
     out_dir = root / f"{today:%Y%m%d}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    sender = f'{cfg.get("sender_name", "")} <{cfg.get("sender_email", "")}>'
     for i, item in enumerate(batch, start=1):
-        msg = EmailMessage()
-        msg["From"] = sender
-        msg["To"] = item["email"]
-        msg["Subject"] = item["oggetto"]
-        msg["X-Prospecting-Variante"] = item.get("variante", "")
-        msg["X-Prospecting-Versione"] = item.get("versione", "")
-        msg.set_content(item["corpo"])
+        msg = build_message(item, cfg, today=today)
         safe = re.sub(r"[^a-z0-9]+", "_", str(item["email"]).lower()).strip("_")
         (out_dir / f"{i:02d}_{item.get('variante','X')}_{safe}.eml").write_bytes(
             bytes(msg))
@@ -533,6 +568,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="abilita le scritture dell'auto-rifornimento")
     ap.add_argument("--outlook-drafts", action="store_true",
                     help="crea bozze in Outlook via AppleScript (solo macOS, MAI invia)")
+    ap.add_argument("--imap-drafts", action="store_true",
+                    help="carica le bozze in casella via IMAP APPEND (ovunque, MAI invia)")
     args = ap.parse_args(argv)
 
     import yaml
@@ -576,6 +613,19 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  · {err}")
         else:
             print(f"Outlook non raggiungibile ({res['reason']}). "
+                  f"Fallback: usa i file .eml in {out_dir}.")
+
+    if args.imap_drafts:
+        res = create_imap_drafts(batch, cfg)
+        if res["available"]:
+            print(f"IMAP: {res['created']} bozze caricate nei Draft"
+                  + (f", {res['skipped']} già presenti" if res["skipped"] else "")
+                  + (f", {res['failed']} fallite" if res["failed"] else "")
+                  + " (nessuna inviata).")
+            for err in res["errors"][:3]:
+                print(f"  · {err}")
+        else:
+            print(f"IMAP non disponibile ({res['reason']}). "
                   f"Fallback: usa i file .eml in {out_dir}.")
 
     notify("Queue builder", f"{len(batch)} bozze pronte in {out_dir}")
@@ -664,6 +714,128 @@ def create_outlook_drafts(batch: list[dict], cfg: dict) -> dict:
             errors.append(f"{item.get('email','?')}: {type(exc).__name__}")
     return {"available": True, "reason": "", "created": created,
             "failed": failed, "errors": errors}
+
+
+# --------------------------------------------------------------------------
+# Bozze via IMAP — alternativa ad AppleScript, senza dipendenza da macOS
+# --------------------------------------------------------------------------
+# Perché esiste: --outlook-drafts richiede macOS + Outlook "classico" (il nuovo
+# Outlook per Mac ha perso gran parte del supporto AppleScript). L'APPEND IMAP
+# ottiene lo stesso risultato — la bozza compare nella cartella Bozze — da
+# qualunque sistema operativo.
+#
+# Privacy (regola 1): i corpi non vanno verso API cloud di terzi. La casella
+# aziendale è la DESTINAZIONE naturale della bozza: è esattamente dove
+# --outlook-drafts la mette. Nessun altro servizio vede il testo.
+#
+# Umano nel loop (regola 2): qui si usa SOLO imaplib.append con flag \Draft.
+# Nessun import di smtplib, nessuna chiamata di invio: il messaggio si ferma
+# nelle Bozze e parte solo quando lo mandi tu dal client.
+IMAP_DRAFT_FLAGS = r"(\Draft)"
+
+
+def imap_config(cfg: dict) -> tuple[dict | None, str]:
+    """Risolve la config IMAP e legge la password dall'ambiente. Ritorna
+    (conf, motivo): conf è None se manca qualcosa, con il motivo leggibile.
+    La password NON sta mai in config.yaml — solo il NOME della variabile."""
+    raw = cfg.get("imap") or {}
+    host = str(raw.get("host", "")).strip()
+    user = str(raw.get("user", "")).strip()
+    if not host:
+        return None, "imap.host non configurato"
+    if not user:
+        return None, "imap.user non configurato"
+
+    password_env = str(raw.get("password_env", "IMAP_PASSWORD")).strip()
+    password = os.environ.get(password_env, "")
+    if not password:
+        return None, f"variabile d'ambiente {password_env} vuota o assente"
+
+    return {
+        "host": host,
+        "port": int(raw.get("port", 993) or 993),
+        "user": user,
+        "password": password,
+        "drafts_folder": str(raw.get("drafts_folder", "Drafts")).strip() or "Drafts",
+        "timeout_s": int(raw.get("timeout_s", 30) or 30),
+    }, ""
+
+
+def _imap_quote(value: str) -> str:
+    """Stringa quotata IMAP. Serve sia per i nomi di cartella ('Posta inviata'
+    si spezzerebbe sullo spazio) sia per il Message-ID nella SEARCH: <, > e @
+    non sono caratteri da atom, e un server reale ignora il criterio non quotato
+    restituendo zero risultati — cioè bozze duplicate a ogni run."""
+    return '"%s"' % value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _imap_connect(conf: dict):  # pragma: no cover - richiede un server reale
+    conn = imaplib.IMAP4_SSL(conf["host"], conf["port"], timeout=conf["timeout_s"])
+    conn.login(conf["user"], conf["password"])
+    return conn
+
+
+def _draft_exists(conn, message_id: str) -> bool:
+    """La bozza è già in cartella? Cartella già SELECT-ata dal chiamante.
+    Il Message-ID va QUOTATO: vedi _imap_quote."""
+    typ, data = conn.search(None, "HEADER", "Message-ID", _imap_quote(message_id))
+    return typ == "OK" and bool(data) and bool((data[0] or b"").split())
+
+
+def create_imap_drafts(batch: list[dict], cfg: dict, today: datetime | None = None,
+                       _connect=None) -> dict:
+    """Carica le bozze del batch nella cartella Bozze via IMAP APPEND. Non invia
+    mai. Idempotente: le bozze già presenti (stesso Message-ID) sono saltate, non
+    duplicate. `_connect` è il punto di iniezione per i test.
+
+    Ritorna available=False (con motivo) se la config manca o il server non
+    risponde: il chiamante fa fallback sui .eml già scritti su disco."""
+    conf, reason = imap_config(cfg)
+    if conf is None:
+        return {"available": False, "reason": reason, "created": 0,
+                "skipped": 0, "failed": 0, "errors": []}
+
+    try:
+        conn = (_connect or _imap_connect)(conf)
+    except Exception as exc:
+        return {"available": False, "reason": f"{type(exc).__name__}: {exc}",
+                "created": 0, "skipped": 0, "failed": 0, "errors": []}
+
+    folder = _imap_quote(conf["drafts_folder"])
+    created = skipped = failed = 0
+    errors: list[str] = []
+    try:
+        # SELECT in anticipo: una cartella sbagliata (es. "Drafts" su casella
+        # italiana che la chiama "Bozze") è un errore di config, non 27 fallimenti.
+        typ, _ = conn.select(folder)
+        if typ != "OK":
+            return {"available": False,
+                    "reason": f"cartella {conf['drafts_folder']!r} non trovata",
+                    "created": 0, "skipped": 0, "failed": 0, "errors": []}
+
+        for item in batch:
+            msg = build_message(item, cfg, today=today)
+            try:
+                if _draft_exists(conn, msg["Message-ID"]):
+                    skipped += 1
+                    continue
+                typ, data = conn.append(folder, IMAP_DRAFT_FLAGS, None, bytes(msg))
+                if typ == "OK":
+                    created += 1
+                else:
+                    failed += 1
+                    errors.append(f"{item.get('email','?')}: APPEND {typ} {data}")
+            except Exception as exc:
+                failed += 1
+                errors.append(f"{item.get('email','?')}: {type(exc).__name__}: {exc}")
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+    return {"available": True, "reason": "", "created": created,
+            "skipped": skipped, "failed": failed, "errors": errors}
 
 
 if __name__ == "__main__":

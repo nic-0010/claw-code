@@ -39,6 +39,7 @@ python -m scanner.reply_scanner --config config.yaml --apply
 python -m queue.queue_builder --config config.yaml
 python -m queue.queue_builder --config config.yaml --apply             # abilita refill
 python -m queue.queue_builder --config config.yaml --outlook-drafts    # bozze in Outlook (macOS)
+python -m queue.queue_builder --config config.yaml --imap-drafts       # bozze in casella via IMAP (ovunque)
 python -m queue.lead_refill  --config config.yaml --apply       # rifornimento archivio
 
 # Registrazione invii del giorno nel Registro (fine mattina)
@@ -62,6 +63,41 @@ python -m evals.eval_verifier
 python -m evals.eval_scanner
 ```
 
+## Come arrivano le bozze in casella
+Il queue builder scrive sempre i `.eml` in `bozze/YYYYMMDD/`: quella è la
+sorgente, e da sola basta (i file si trascinano nella cartella Bozze di
+qualunque client). Per saltare il passaggio manuale ci sono due strade
+alternative, **entrambe opzionali e nessuna delle due invia mai**:
+
+| | Flag | Requisiti | Note |
+|---|---|---|---|
+| AppleScript | `--outlook-drafts` | macOS + Outlook "classico" | Il **nuovo** Outlook per Mac ha perso gran parte del supporto AppleScript: se fallisce, o si torna al vecchio con il toggle *New Outlook*, o si concede Impostazioni → Privacy → Automazione → Terminale → Outlook. |
+| IMAP | `--imap-drafts` | Solo la casella | Nessuna dipendenza da macOS né da Outlook installato. `APPEND` con flag `\Draft`. |
+
+L'IMAP è idempotente: ogni bozza ha un `Message-ID` deterministico (giorno +
+destinatario + testo), quindi rilanciare il batch salta quelle già in cartella
+invece di duplicarle.
+
+Config in `config.yaml` (blocco `imap:`, vedi `config.example.yaml`). La
+password **non si scrive nel file**: si indica il nome della variabile
+d'ambiente da cui leggerla.
+
+```bash
+export IMAP_PASSWORD='...'        # password o app-password
+python -m queue.queue_builder --config config.yaml --imap-drafts
+```
+
+Se la config manca o il server non risponde, il comando lo dice e non carica
+nulla: i `.eml` su disco restano il fallback.
+
+> `drafts_folder` va scritto **esatto**: su una casella in italiano la cartella
+> si chiama `Bozze`, non `Drafts`. Se sbagliato il run si ferma subito con il
+> motivo, senza caricare bozze a metà.
+
 ## Privacy
 Il master e ogni dato reale **non entrano nel repo** (`.gitignore`). Vedi
 `CLAUDE.md` per le regole non negoziabili.
+
+L'APPEND IMAP non viola la regola 1: i corpi vanno alla **tua casella**, che è
+la destinazione naturale della bozza (esattamente dove la mette
+`--outlook-drafts`). Nessuna API cloud di terzi vede il testo.

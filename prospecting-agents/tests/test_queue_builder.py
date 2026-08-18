@@ -409,6 +409,185 @@ def test_create_outlook_drafts_fallback_non_macos(monkeypatch):
     assert res["reason"]
 
 
+# --------------------------------------------------------------------------
+# Bozze via IMAP (alternativa ad AppleScript)
+# --------------------------------------------------------------------------
+IMAP_CFG = dict(CFG, imap={"host": "imap.esempio.it", "user": "io@me.it",
+                           "password_env": "TEST_IMAP_PW",
+                           "drafts_folder": "Bozze"})
+
+
+class FakeIMAP:
+    """Server IMAP finto: registra APPEND e SELECT e simula le bozze già in
+    cartella. Se qualcuno provasse a inviare, non troverebbe alcun metodo."""
+
+    def __init__(self, existing=None, select_ok=True):
+        self.existing = set(existing or ())
+        self.select_ok = select_ok
+        self.appended = []
+        self.selected = []
+        self.logged_out = False
+
+    def select(self, folder):
+        self.selected.append(folder)
+        return ("OK" if self.select_ok else "NO"), [b""]
+
+    def search(self, charset, *criteria):
+        # Un server reale tratta il criterio come stringa IMAP: se non è quotato
+        # non fa match e restituisce zero risultati (→ bozze duplicate). Lo stub
+        # è severo apposta, altrimenti nasconderebbe proprio quel bug.
+        grezzo = criteria[-1]
+        assert grezzo.startswith('"') and grezzo.endswith('"'), \
+            f"criterio SEARCH non quotato: {grezzo}"
+        return "OK", [b"1" if grezzo[1:-1] in self.existing else b""]
+
+    def append(self, folder, flags, date_time, message):
+        self.appended.append((folder, flags, message))
+        text = message.decode("utf-8")
+        self.existing.add(text.split("Message-ID: ")[1].split("\n")[0].strip())
+        return "OK", [b"APPENDUID"]
+
+    def logout(self):
+        self.logged_out = True
+
+
+def _batch_reale(n=5):
+    from common import email_matrix as em
+    batch = []
+    for i in range(n):
+        s, b, _ = em.build_email(f"Tizio Caio{i}", ["GSE", "Fendi S.p.A."][i % 2],
+                                 "Manager", email=f"t.caio{i}@ente{i}.it")
+        batch.append({"oggetto": s, "corpo": b, "email": f"t.caio{i}@ente{i}.it",
+                      "variante": "C"})
+    return batch
+
+
+def test_imap_solo_append_come_bozza_mai_invio():
+    """Regola 2 (umano nel loop): il modulo carica bozze e basta. Nessun
+    smtplib, nessuna chiamata di invio, flag \\Draft esplicito."""
+    assert "Draft" in qb.IMAP_DRAFT_FLAGS
+    # nessun import di smtplib (la menzione nei commenti non conta: si guarda
+    # l'albero sintattico, non il testo)
+    import ast
+    tree = ast.parse(Path(qb.__file__).read_text(encoding="utf-8"))
+    importati = {
+        n.module.split(".")[0] if isinstance(n, ast.ImportFrom) and n.module else a.name.split(".")[0]
+        for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom))
+        for a in (n.names or [None]) if a is not None
+    }
+    assert "smtplib" not in importati
+    # e nessuna chiamata di invio, comunque scritta
+    chiamate = {n.func.attr for n in ast.walk(tree)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+    assert not (chiamate & {"send", "sendmail", "send_message"})
+
+
+def test_imap_config_password_solo_da_ambiente(monkeypatch):
+    monkeypatch.setenv("TEST_IMAP_PW", "segreta")
+    conf, reason = qb.imap_config(IMAP_CFG)
+    assert reason == ""
+    assert conf["password"] == "segreta"
+    assert conf["drafts_folder"] == "Bozze"
+    assert conf["port"] == 993                       # default applicato
+    # la password non è scritta nella config: solo il NOME della variabile
+    assert "segreta" not in str(IMAP_CFG)
+
+
+def test_imap_config_incompleta_dice_cosa_manca(monkeypatch):
+    monkeypatch.delenv("TEST_IMAP_PW", raising=False)
+    conf, reason = qb.imap_config(IMAP_CFG)          # variabile d'ambiente assente
+    assert conf is None and "TEST_IMAP_PW" in reason
+
+    conf, reason = qb.imap_config(CFG)               # blocco imap assente del tutto
+    assert conf is None and "host" in reason
+
+
+def test_imap_quote_cartella_con_spazi():
+    assert qb._imap_quote("Bozze") == '"Bozze"'
+    assert qb._imap_quote("Posta inviata") == '"Posta inviata"'
+
+
+def test_draft_message_id_deterministico_e_per_giorno():
+    item = {"email": "a@b.it", "oggetto": "O", "corpo": "C", "variante": "A"}
+    primo = qb.draft_message_id(item, CFG, today=TODAY)
+    assert primo == qb.draft_message_id(item, CFG, today=TODAY)    # idempotente
+    domani = qb.draft_message_id(item, CFG, today=datetime(2026, 7, 11))
+    assert domani != primo                                         # nuovo giorno, nuova bozza
+    assert primo.endswith("@me.it>")                               # dominio del mittente
+
+
+def test_bozza_imap_identica_al_eml_su_disco(tmp_path):
+    """Sorgente unica: il .eml archiviato e la bozza caricata in casella sono
+    lo stesso messaggio, byte per byte."""
+    batch = _batch_reale(1)
+    out_dir = qb.write_outputs(batch, CFG, out_root=tmp_path / "bozze", today=TODAY)
+    dal_disco = sorted(out_dir.glob("*.eml"))[0].read_bytes()
+    assert bytes(qb.build_message(batch[0], CFG, today=TODAY)) == dal_disco
+
+
+def test_create_imap_drafts_carica_batch_verbatim(monkeypatch):
+    monkeypatch.setenv("TEST_IMAP_PW", "segreta")
+    fake = FakeIMAP()
+    batch = _batch_reale(5)
+    res = qb.create_imap_drafts(batch, IMAP_CFG, today=TODAY, _connect=lambda conf: fake)
+
+    assert res["available"] is True
+    assert (res["created"], res["skipped"], res["failed"]) == (5, 0, 0)
+    assert fake.selected == ['"Bozze"']              # cartella quotata, una sola SELECT
+    assert len(fake.appended) == 5
+    for folder, flags, raw in fake.appended:
+        assert folder == '"Bozze"'
+        assert flags == qb.IMAP_DRAFT_FLAGS          # salvata come BOZZA
+    # la firma con il · arriva verbatim fino al server
+    from email import message_from_bytes
+    corpi = [message_from_bytes(raw).get_payload(decode=True).decode("utf-8")
+             for _, _, raw in fake.appended]
+    assert all("·" in c for c in corpi)
+    assert fake.logged_out is True
+
+
+def test_create_imap_drafts_idempotente_non_duplica(monkeypatch):
+    """Regola 6: rieseguire il batch non riempie le Bozze di doppioni."""
+    monkeypatch.setenv("TEST_IMAP_PW", "segreta")
+    fake = FakeIMAP()
+    batch = _batch_reale(3)
+
+    primo = qb.create_imap_drafts(batch, IMAP_CFG, today=TODAY, _connect=lambda c: fake)
+    secondo = qb.create_imap_drafts(batch, IMAP_CFG, today=TODAY, _connect=lambda c: fake)
+
+    assert (primo["created"], primo["skipped"]) == (3, 0)
+    assert (secondo["created"], secondo["skipped"]) == (0, 3)
+    assert len(fake.appended) == 3                   # nessun APPEND in più
+
+
+def test_create_imap_drafts_cartella_sbagliata_si_ferma_subito(monkeypatch):
+    """'Drafts' su una casella che la chiama 'Bozze': è un errore di config, va
+    detto subito e non deve produrre 27 fallimenti uno per uno."""
+    monkeypatch.setenv("TEST_IMAP_PW", "segreta")
+    fake = FakeIMAP(select_ok=False)
+    res = qb.create_imap_drafts(_batch_reale(5), IMAP_CFG, today=TODAY,
+                                _connect=lambda c: fake)
+    assert res["available"] is False
+    assert "Bozze" in res["reason"]
+    assert fake.appended == []
+
+
+def test_create_imap_drafts_fallback_se_config_o_server_mancano(monkeypatch):
+    monkeypatch.delenv("TEST_IMAP_PW", raising=False)
+    res = qb.create_imap_drafts(_batch_reale(2), IMAP_CFG, today=TODAY)
+    assert res["available"] is False and res["created"] == 0
+
+    monkeypatch.setenv("TEST_IMAP_PW", "segreta")
+
+    def esplode(conf):
+        raise OSError("connessione rifiutata")
+
+    res = qb.create_imap_drafts(_batch_reale(2), IMAP_CFG, today=TODAY, _connect=esplode)
+    assert res["available"] is False
+    assert "connessione rifiutata" in res["reason"]
+    assert res["created"] == 0                       # il chiamante userà i .eml
+
+
 def test_render_placeholders():
     out = qb.render_placeholders(
         "Gentile [Cognome] di [Ente], ci vediamo a [mese] il [GG] alle [HH:MM].",
